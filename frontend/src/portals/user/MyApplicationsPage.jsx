@@ -1,0 +1,291 @@
+// My Applications — the unified list of SAVED and APPLIED jobs.
+//
+//  - Saved entries can be tailored (Rewrite) and applied to.
+//  - Applied entries cannot be rewritten; the application was already sent.
+//  - Loads 20 at a time; "View all" pulls in the next 20.
+//  - Every entry can be deleted so the list stays manageable.
+import { useState, useEffect } from 'react';
+import { apiRequest } from '../../lib/api.js';
+import {
+  PageHeader, Card, StatTile, Pill, EmptyState,
+  btnClass, btnPrimaryClass, inputClass
+} from '../../components/ui.jsx';
+
+const PAGE_SIZE = 20;
+
+const APPLIED_STATUSES = [
+  'Applied',
+  'Under Review',
+  'Online Assessment',
+  'Technical Interview',
+  'Final Interview',
+  'Offer',
+  'Rejected'
+];
+
+function MyJobEntry({ entry, onRewrite, onDelete, onStatusChange, onApply, busyId }) {
+  const isSaved = entry.kind === 'saved';
+  const busy = busyId === entry.entryId;
+
+  return (
+    <div className="mb-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
+      <div className="flex flex-wrap items-start justify-between gap-2.5">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="truncate text-sm font-bold text-slate-900">{entry.title}</p>
+            <Pill tone={isSaved ? 'amber' : 'green'}>
+              {isSaved ? 'Saved' : entry.status}
+            </Pill>
+            {isSaved && entry.atsScore != null && (
+              <Pill tone={entry.atsScore >= 80 ? 'green' : entry.atsScore >= 60 ? 'blue' : 'amber'}>
+                ATS {entry.atsScore}%
+              </Pill>
+            )}
+          </div>
+
+          <p className="mt-0.5 truncate text-xs text-slate-500">
+            {[entry.company, entry.location, entry.workMode].filter(Boolean).join(' · ')}
+          </p>
+
+          {isSaved && entry.atsMissing?.length > 0 && (
+            <p className="mt-1 text-xs font-bold text-amber-600">
+              Missing: {entry.atsMissing.slice(0, 5).join(', ')}
+            </p>
+          )}
+        </div>
+
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {isSaved ? (
+            <>
+              <button
+                className={btnPrimaryClass}
+                disabled={busy}
+                onClick={() => onRewrite(entry)}
+              >
+                {busy ? 'Rewriting...' : 'Rewrite'}
+              </button>
+
+              <button className={btnClass} onClick={() => onApply(entry)}>
+                Apply
+              </button>
+            </>
+          ) : (
+            <select
+              value={entry.status}
+              onChange={(event) => onStatusChange(entry, event.target.value)}
+              className={`${inputClass} w-[165px]`}
+            >
+              {APPLIED_STATUSES.map((status) => (
+                <option key={status}>{status}</option>
+              ))}
+            </select>
+          )}
+
+          <button
+            className="rounded-lg bg-red-50 px-2.5 py-1 text-[11px] font-bold text-red-700 hover:bg-red-100"
+            onClick={() => onDelete(entry)}
+            title="Remove from this list"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MyApplicationsPage({ onDashboardChange, showToast }) {
+  const [entries, setEntries] = useState([]);
+  const [meta, setMeta] = useState({ total: 0, savedCount: 0, appliedCount: 0, hasMore: false });
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [filter, setFilter] = useState('all');
+  const [busyId, setBusyId] = useState('');
+
+  async function load(limit = PAGE_SIZE) {
+    setLoading(true);
+    try {
+      const data = await apiRequest(`/api/my-jobs?offset=0&limit=${limit}`);
+      setEntries(data.entries || []);
+      setMeta({
+        total: data.total || 0,
+        savedCount: data.savedCount || 0,
+        appliedCount: data.appliedCount || 0,
+        hasMore: data.hasMore || false
+      });
+    } catch (error) {
+      showToast(error.message || 'Unable to load your jobs.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  // "View all" pulls in the NEXT 20 on top of what is already shown.
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      const data = await apiRequest(
+        `/api/my-jobs?offset=${entries.length}&limit=${PAGE_SIZE}`
+      );
+      setEntries((current) => [...current, ...(data.entries || [])]);
+      setMeta((current) => ({ ...current, hasMore: data.hasMore || false }));
+    } catch (error) {
+      showToast(error.message || 'Unable to load more.');
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  async function rewrite(entry) {
+    setBusyId(entry.entryId);
+    try {
+      const data = await apiRequest('/api/documents/rewrite', {
+        method: 'POST',
+        body: { jobId: entry.jobId }
+      });
+      showToast(data.message || 'Resume tailored. See My Resumes.');
+    } catch (error) {
+      showToast(error.message || 'Unable to tailor the resume.');
+    } finally {
+      setBusyId('');
+    }
+  }
+
+  async function remove(entry) {
+    const confirmed = window.confirm(`Remove "${entry.title}" from your list?`);
+    if (!confirmed) return;
+
+    try {
+      const id = entry.kind === 'saved' ? entry.jobId : entry.applicationId;
+      await apiRequest(`/api/my-jobs/${entry.kind}/${id}`, { method: 'DELETE' });
+
+      setEntries((current) => current.filter((item) => item.entryId !== entry.entryId));
+      setMeta((current) => ({
+        ...current,
+        total: Math.max(0, current.total - 1),
+        savedCount: current.savedCount - (entry.kind === 'saved' ? 1 : 0),
+        appliedCount: current.appliedCount - (entry.kind === 'applied' ? 1 : 0)
+      }));
+
+      showToast('Removed.');
+      if (onDashboardChange) await onDashboardChange();
+    } catch (error) {
+      showToast(error.message || 'Unable to remove this entry.');
+    }
+  }
+
+  async function changeStatus(entry, status) {
+    try {
+      await apiRequest(`/api/applications/${entry.applicationId}`, {
+        method: 'PUT',
+        body: { status }
+      });
+
+      setEntries((current) =>
+        current.map((item) =>
+          item.entryId === entry.entryId ? { ...item, status } : item
+        )
+      );
+
+      showToast(`Status updated to ${status}.`);
+      if (onDashboardChange) await onDashboardChange();
+    } catch (error) {
+      showToast(error.message || 'Unable to update the status.');
+    }
+  }
+
+  // Applying from a saved entry: open the real posting, then record it.
+  async function applyFromSaved(entry) {
+    if (entry.url) {
+      window.open(entry.url, '_blank', 'noopener,noreferrer');
+    }
+
+    const didApply = window.confirm(
+      `Did you apply to ${entry.title}${entry.company ? ` at ${entry.company}` : ''}?`
+    );
+    if (!didApply) return;
+
+    try {
+      await apiRequest(`/api/applications/${entry.jobId}`, {
+        method: 'POST',
+        body: { job: entry, status: 'Applied' }
+      });
+
+      showToast('Application recorded.');
+      await load(Math.max(PAGE_SIZE, entries.length));
+      if (onDashboardChange) await onDashboardChange();
+    } catch (error) {
+      showToast(error.message || 'Unable to record the application.');
+    }
+  }
+
+  const visible = entries.filter((entry) =>
+    filter === 'all' ? true : entry.kind === filter
+  );
+
+  return (
+    <section>
+      <PageHeader
+        title="My Applications"
+        subtitle="Everything you saved or applied to. Saved jobs can still be tailored."
+      />
+
+      <div className="mb-4 grid gap-3.5 md:grid-cols-3">
+        <StatTile label="Applied" value={meta.appliedCount} />
+        <StatTile label="Saved" value={meta.savedCount} />
+        <StatTile label="Total" value={meta.total} />
+      </div>
+
+      <Card
+        title={`Showing ${visible.length} of ${meta.total}`}
+        action={
+          <select
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            className={`${inputClass} w-[150px]`}
+          >
+            <option value="all">All</option>
+            <option value="saved">Saved only</option>
+            <option value="applied">Applied only</option>
+          </select>
+        }
+      >
+        {loading ? (
+          <EmptyState text="Loading your jobs..." />
+        ) : visible.length ? (
+          <>
+            {visible.map((entry) => (
+              <MyJobEntry
+                key={entry.entryId}
+                entry={entry}
+                busyId={busyId}
+                onRewrite={rewrite}
+                onDelete={remove}
+                onStatusChange={changeStatus}
+                onApply={applyFromSaved}
+              />
+            ))}
+
+            {meta.hasMore && filter === 'all' && (
+              <div className="mt-3 text-center">
+                <button className={btnClass} disabled={loadingMore} onClick={loadMore}>
+                  {loadingMore ? 'Loading...' : `View all (next ${PAGE_SIZE})`}
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <EmptyState text="Nothing here yet. Save or apply to a job from Job Search." />
+        )}
+      </Card>
+    </section>
+  );
+}
+
+export {
+  MyApplicationsPage
+};

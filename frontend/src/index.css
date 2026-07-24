@@ -1,0 +1,163 @@
+@import "tailwindcss";
+
+body {
+  background: #f8fafc;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* ============================================================
+   Dark mode
+   Applied when <html class="dark"> is set (see lib/theme.js).
+   These overrides remap the colour utilities the app uses so
+   every portal — user, recruiter, admin, super admin — adapts
+   without changing component markup.
+   ============================================================ */
+html.dark,
+html.dark body {
+  background: #0b1120;
+  color-scheme: dark;
+}
+
+/* Surfaces */
+.dark .bg-white { background-color: #131c2e !important; }
+.dark .bg-white\/90 { background-color: rgba(19, 28, 46, 0.9) !important; }
+.dark .bg-slate-50 { background-color: #0f172a !important; }
+.dark .bg-slate-100 { background-color: #0f172a !important; }
+.dark .bg-slate-200 { background-color: #1e293b !important; }
+.dark .bg-slate-900 { background-color: #1e293b !important; }
+.dark .bg-slate-950 { background-color: #060b16 !important; }
+
+/* Text */
+.dark .text-slate-950,
+.dark .text-slate-900,
+.dark .text-slate-800 { color: #f1f5f9 !important; }
+.dark .text-slate-700,
+.dark .text-slate-600 { color: #cbd5e1 !important; }
+.dark .text-slate-500 { color: #94a3b8 !important; }
+.dark .text-slate-400 { color: #7688a1 !important; }
+
+/* Borders */
+.dark .border-slate-200 { border-color: #24314a !important; }
+.dark .border-slate-100 { border-color: #1c2740 !important; }
+.dark .border { border-color: #24314a; }
+
+/* Soft status tints — darker background, lighter text */
+.dark .bg-violet-50 { background-color: rgba(124, 58, 237, 0.22) !important; }
+.dark .text-violet-700 { color: #c4b5fd !important; }
+.dark .bg-green-50 { background-color: rgba(34, 197, 94, 0.16) !important; }
+.dark .text-green-700 { color: #4ade80 !important; }
+.dark .bg-amber-50 { background-color: rgba(245, 158, 11, 0.16) !important; }
+.dark .text-amber-700 { color: #fbbf24 !important; }
+.dark .bg-red-50 { background-color: rgba(239, 68, 68, 0.16) !important; }
+.dark .text-red-700 { color: #f87171 !important; }
+.dark .bg-blue-50 { background-color: rgba(59, 130, 246, 0.16) !important; }
+.dark .text-blue-700 { color: #93c5fd !important; }
+.dark .text-blue-600 { color: #93c5fd !important; }
+
+/* Form controls */
+.dark input,
+.dark select,
+.dark textarea {
+  color: #f1f5f9;
+  background-color: #0f172a;
+  border-color: #24314a;
+}
+.dark input::placeholder,
+.dark textarea::placeholder { color: #64748b; }
+.dark select option { background-color: #131c2e; color: #f1f5f9; }
+
+/* Keep solid violet buttons and their white text unchanged in dark mode. */
+.dark .bg-violet-600 { background-color: #7c3aed !important; }
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f7fb;
+  padding: 24px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  background: white;
+  border-radius: 18px;
+  padding: 32px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.12);
+}
+
+.auth-card h1 {
+  margin: 0;
+  font-size: 30px;
+  color: #111827;
+}
+
+.auth-subtitle {
+  margin: 8px 0 24px;
+  color: #6b7280;
+}
+
+.auth-card form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auth-card label {
+  font-weight: 600;
+  color: #374151;
+  font-size: 14px;
+}
+
+.auth-card input {
+  padding: 12px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  font-size: 15px;
+  outline: none;
+}
+
+.auth-card input:focus {
+  border-color: #2563eb;
+}
+
+.auth-card button[type='submit'] {
+  margin-top: 10px;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 10px;
+  background: #2563eb;
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.auth-card button[type='submit']:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.auth-error {
+  background: #fee2e2;
+  color: #991b1b;
+  padding: 10px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.auth-switch {
+  margin-top: 18px;
+  color: #6b7280;
+  text-align: center;
+}
+
+.auth-switch button {
+  border: none;
+  background: transparent;
+  color: #2563eb;
+  font-weight: 700;
+  cursor: pointer;
+}

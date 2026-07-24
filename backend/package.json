@@ -1,0 +1,40 @@
+{
+  "name": "opus-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "dev": "nodemon server.js",
+    "start": "node server.js",
+    "seed:super-admin": "node scripts/seedAdmin.js",
+    "db:migrate": "node db/migrate.js",
+    "db:import": "node db/import-db-json.js",
+    "test": "node tests/e2e.test.mjs",
+    "test:unit": "node --test tests/ats.test.mjs tests/myjobs.test.mjs tests/resume.test.mjs tests/workday.test.mjs tests/search.test.mjs tests/fileguard.test.mjs"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "latest",
+    "dotenv": "^17.4.2",
+    "express": "latest",
+    "googleapis": "^173.0.0",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.7.4",
+    "morgan": "latest",
+    "multer": "^2.2.0",
+    "nodemailer": "^9.0.3",
+    "pdfkit": "^0.19.1",
+    "docx": "^9.0.2",
+    "mammoth": "^1.8.0",
+    "pizzip": "^3.1.7"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^11.2.0",
+    "nodemon": "latest"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}

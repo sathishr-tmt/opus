@@ -1,0 +1,439 @@
+// Admin portal sections — prototype design: Job Postings, Job Sources,
+// Calendar & Interviews, Reports, and Settings wired to the backend.
+import { useState, useEffect } from 'react';
+import { RefreshCw, Download } from 'lucide-react';
+import {
+  PageHeader, Card, Pill, ListItem, MonthCalendar, Field,
+  inputClass, btnClass, btnSmClass, btnPrimaryClass, EmptyState
+} from '../../components/ui.jsx';
+import { apiRequest, API_BASE } from '../../lib/api.js';
+import { AdminDashboardPage, AdminRecruiterApprovalsPage, AdminUsersPage } from './AdminPage.jsx';
+import { AdminInternalApplicationsPage } from './AdminInternalApplicationsPage.jsx';
+
+function downloadUrl(path) {
+  window.open(`${API_BASE}${path}`, '_blank');
+}
+
+function AdminJobPostingsPage({ showToast }) {
+  const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const data = await apiRequest('/api/admin/platform-jobs');
+      setJobs(data.jobs || []);
+    } catch (error) {
+      showToast(error.message || 'Unable to load postings.');
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => { load(); }, []);
+
+  async function setStatus(jobId, status) {
+    try {
+      await apiRequest(`/api/admin/platform-jobs/${jobId}`, { method: 'PATCH', body: { status } });
+      showToast(`Posting ${status === 'closed' ? 'closed' : 'reopened'}.`);
+      load();
+    } catch (error) {
+      showToast(error.message || 'Update failed.');
+    }
+  }
+
+  async function remove(jobId) {
+    try {
+      await apiRequest(`/api/admin/platform-jobs/${jobId}`, { method: 'DELETE' });
+      showToast('Posting deleted.');
+      load();
+    } catch (error) {
+      showToast(error.message || 'Delete failed.');
+    }
+  }
+
+  return (
+    <section>
+      <PageHeader title="Job Postings" subtitle="Manage every posting on the platform." />
+      <Card
+        title="All job postings"
+        action={
+          <button onClick={() => downloadUrl('/api/exports/admin/job-postings.csv')} className={btnSmClass}>
+            <Download size={12} className="mr-1 inline" /> Export CSV
+          </button>
+        }
+      >
+        <p className="mb-3.5 text-[13px] text-slate-500">
+          Every posting across the platform. Admins can close, reopen, or delete any posting.
+        </p>
+        {loading ? (
+          <EmptyState text="Loading postings..." />
+        ) : jobs.length ? (
+          jobs.map((job) => (
+            <ListItem
+              key={job.id}
+              title={job.title}
+              meta={`${job.company || 'OPUS'} · ${job.location}`}
+              right={
+                <>
+                  <Pill>{job.status}</Pill>
+                  {job.status === 'open'
+                    ? <button className={btnSmClass} onClick={() => setStatus(job.id, 'closed')}>Close</button>
+                    : <button className={btnSmClass} onClick={() => setStatus(job.id, 'open')}>Reopen</button>}
+                  <button
+                    className="rounded-lg bg-red-50 px-2.5 py-1 text-[11px] font-bold text-red-700 hover:bg-red-100"
+                    onClick={() => remove(job.id)}
+                  >
+                    Delete
+                  </button>
+                </>
+              }
+            />
+          ))
+        ) : (
+          <EmptyState text="No platform postings yet." />
+        )}
+      </Card>
+    </section>
+  );
+}
+
+function AdminJobSourcesPage({ showToast }) {
+  const [sources, setSources] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const data = await apiRequest('/api/admin/job-sources');
+      setSources(data.sources || []);
+    } catch (error) {
+      showToast(error.message || 'Unable to load sources.');
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => { load(); }, []);
+
+  async function refresh() {
+    setRefreshing(true);
+    try {
+      const data = await apiRequest('/api/admin/job-sources/refresh', { method: 'POST', body: {} });
+      setSources(data.sources || []);
+      showToast('Sources probed.');
+    } catch (error) {
+      showToast(error.message || 'Probe failed.');
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  return (
+    <section>
+      <PageHeader title="Job Sources" subtitle="Monitor external job feeds and health." />
+      <Card
+        title="Job sources & health"
+        action={
+          <button onClick={refresh} disabled={refreshing} className={btnPrimaryClass}>
+            <RefreshCw size={12} className={`mr-1 inline ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? 'Probing...' : 'Probe now'}
+          </button>
+        }
+      >
+        <p className="mb-3.5 text-[13px] text-slate-500">
+          External job feeds OPUS pulls from. Probe to check each source is responding.
+        </p>
+        {loading ? (
+          <EmptyState text="Loading sources..." />
+        ) : sources.length ? (
+          sources.map((s) => (
+            <ListItem
+              key={s.source}
+              title={s.source}
+              meta={
+                (s.ok ? `${s.lastCount ?? s.count ?? 0} results` : (s.lastError || 'Unavailable')) +
+                (s.lastSuccessAt ? ` · last ok ${new Date(s.lastSuccessAt).toLocaleString()}` : '')
+              }
+              right={<Pill tone={s.ok ? 'green' : 'red'}>{s.ok ? 'Healthy' : 'Failing'}</Pill>}
+            />
+          ))
+        ) : (
+          <EmptyState text="No source data yet. Probe now or run a job search first." />
+        )}
+      </Card>
+    </section>
+  );
+}
+
+function AdminInterviewsPage({ showToast }) {
+  const [interviews, setInterviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [monthDate, setMonthDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+
+  async function load() {
+    setLoading(true);
+    try {
+      const data = await apiRequest('/api/admin/interviews');
+      setInterviews(data.interviews || []);
+    } catch (error) {
+      showToast(error.message || 'Unable to load interviews.');
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => { load(); }, []);
+
+  async function cancel(id) {
+    try {
+      await apiRequest(`/api/admin/interviews/${id}`, { method: 'DELETE' });
+      showToast('Interview cancelled.');
+      load();
+    } catch (error) {
+      showToast(error.message || 'Cancel failed.');
+    }
+  }
+
+  const markedDays = interviews
+    .filter((i) => i.status !== 'cancelled' && i.startsAt)
+    .map((i) => new Date(i.startsAt))
+    .filter((d) =>
+      !Number.isNaN(d.getTime()) &&
+      d.getFullYear() === monthDate.getFullYear() &&
+      d.getMonth() === monthDate.getMonth()
+    )
+    .map((d) => d.getDate());
+
+  return (
+    <section>
+      <PageHeader title="Calendar & Interviews" subtitle="All interviews across recruiters." />
+      <div className="grid gap-3.5 lg:grid-cols-2">
+        <Card>
+          <MonthCalendar
+            monthDate={monthDate}
+            markedDays={markedDays}
+            legend="Interview scheduled"
+            onPrev={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() - 1, 1))}
+            onNext={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1))}
+          />
+        </Card>
+        <Card
+          title="All interviews"
+          action={
+            <button onClick={() => downloadUrl('/api/exports/admin/interviews.ics')} className={btnSmClass}>
+              <Download size={12} className="mr-1 inline" /> Export .ics
+            </button>
+          }
+        >
+          {loading ? (
+            <EmptyState text="Loading interviews..." />
+          ) : interviews.length ? (
+            interviews.map((i) => (
+              <ListItem
+                key={i.id}
+                title={i.title || 'Candidate interview'}
+                meta={`${i.startsAt ? new Date(i.startsAt).toLocaleString() : 'Unscheduled'} · ${i.mode || 'Video'}`}
+                right={
+                  <>
+                    <Pill>{i.status}</Pill>
+                    {i.status !== 'cancelled' && (
+                      <button
+                        className="rounded-lg bg-red-50 px-2.5 py-1 text-[11px] font-bold text-red-700 hover:bg-red-100"
+                        onClick={() => cancel(i.id)}
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </>
+                }
+              />
+            ))
+          ) : (
+            <EmptyState text="No interviews scheduled across the platform." />
+          )}
+        </Card>
+      </div>
+    </section>
+  );
+}
+
+function AdminReportsPage({ showToast }) {
+  const [summary, setSummary] = useState(null);
+
+  useEffect(() => {
+    apiRequest('/api/admin/reports')
+      .then((d) => setSummary(d.summary))
+      .catch((e) => showToast(e.message || 'Unable to load reports.'));
+  }, []);
+
+  const exports = [
+    { title: 'Applications report', meta: 'Every application with status and assigned recruiter', label: 'CSV', path: '/api/exports/admin/applications.csv' },
+    { title: 'Job postings report', meta: 'All postings, owners, and open/closed status', label: 'CSV', path: '/api/exports/admin/job-postings.csv' },
+    { title: 'Interviews report', meta: 'Scheduled interviews across all recruiters', label: '.ics', path: '/api/exports/admin/interviews.ics' },
+    { title: 'Platform summary (PDF)', meta: 'High-level metrics for a period', label: 'PDF', path: '/api/exports/admin/report.pdf' }
+  ];
+
+  function Group({ title, rows, keys }) {
+    return (
+      <Card title={title}>
+        {(rows || []).length ? rows.map((row, idx) => (
+          <div key={idx} className="mb-1.5 flex justify-between rounded-lg bg-slate-50 px-3.5 py-2 text-[13px] font-semibold text-slate-700">
+            <span>{keys.map((k) => row[k]).filter((v) => v !== undefined).join(' / ')}</span>
+            <span className="font-extrabold text-slate-900">{row.c}</span>
+          </div>
+        )) : <EmptyState text="No data." />}
+      </Card>
+    );
+  }
+
+  return (
+    <section>
+      <PageHeader title="Reports" subtitle="Download platform data and summaries." />
+      <Card title="Reports & exports">
+        <p className="mb-3.5 text-[13px] text-slate-500">
+          Download platform data for offline review and sharing.
+        </p>
+        {exports.map((item) => (
+          <ListItem
+            key={item.title}
+            title={item.title}
+            meta={item.meta}
+            right={
+              <button className={btnSmClass} onClick={() => downloadUrl(item.path)}>
+                <Download size={12} className="mr-1 inline" /> {item.label}
+              </button>
+            }
+          />
+        ))}
+      </Card>
+      {summary && (
+        <div className="grid gap-3.5 md:grid-cols-2">
+          <Group title="Users" rows={summary.users} keys={['role', 'status']} />
+          <Group title="Job Postings" rows={summary.jobs} keys={['status']} />
+          <Group title="Applications" rows={summary.applications} keys={['kind', 'status']} />
+          <Group title="Interviews" rows={summary.interviews} keys={['status']} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AdminSettingsPage({ showToast }) {
+  const [settings, setSettings] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '' });
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  useEffect(() => {
+    apiRequest('/api/admin/settings')
+      .then((d) => setSettings(d.settings))
+      .catch((e) => showToast(e.message || 'Unable to load settings.'));
+  }, []);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const data = await apiRequest('/api/admin/settings', { method: 'PUT', body: settings });
+      setSettings(data.settings);
+      showToast('Settings saved.');
+    } catch (error) {
+      showToast(error.message || 'Save failed.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function changePassword() {
+    if (!passwordForm.currentPassword || !passwordForm.newPassword) {
+      showToast('Enter your current and new password.');
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      const data = await apiRequest('/api/account/change-password', {
+        method: 'POST', body: passwordForm
+      });
+      setPasswordForm({ currentPassword: '', newPassword: '' });
+      showToast(data.message || 'Password changed.');
+    } catch (error) {
+      showToast(error.message || 'Unable to change password.');
+    } finally {
+      setChangingPassword(false);
+    }
+  }
+
+  return (
+    <section>
+      <PageHeader title="Settings" subtitle="Admin profile and security." />
+      {settings ? (
+        <Card title="Platform settings" className="max-w-xl">
+          <Field label="Platform name">
+            <input className={inputClass} value={settings.platformName || ''}
+              onChange={(e) => setSettings({ ...settings, platformName: e.target.value })} />
+          </Field>
+          <Field label="Support email">
+            <input className={inputClass} value={settings.supportEmail || ''}
+              onChange={(e) => setSettings({ ...settings, supportEmail: e.target.value })} />
+          </Field>
+          <label className="mb-2 flex items-center gap-2 text-[13px] font-semibold text-slate-700">
+            <input type="checkbox" checked={!!settings.allowRecruiterSelfRegistration}
+              onChange={(e) => setSettings({ ...settings, allowRecruiterSelfRegistration: e.target.checked })} />
+            Allow recruiter self-registration
+          </label>
+          <label className="mb-3.5 flex items-center gap-2 text-[13px] font-semibold text-slate-700">
+            <input type="checkbox" checked={!!settings.maintenanceMode}
+              onChange={(e) => setSettings({ ...settings, maintenanceMode: e.target.checked })} />
+            Maintenance mode
+          </label>
+          <button className={btnPrimaryClass} disabled={saving} onClick={save}>
+            {saving ? 'Saving...' : 'Save settings'}
+          </button>
+        </Card>
+      ) : (
+        <Card className="max-w-xl"><EmptyState text="Loading settings..." /></Card>
+      )}
+      <Card title="Account & security" className="max-w-xl">
+        <Field label="Current password">
+          <input type="password" className={inputClass} value={passwordForm.currentPassword}
+            placeholder="••••••••"
+            onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })} />
+        </Field>
+        <Field label="New password">
+          <input type="password" className={inputClass} value={passwordForm.newPassword}
+            placeholder="••••••••"
+            onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })} />
+        </Field>
+        <button className={btnPrimaryClass} disabled={changingPassword} onClick={changePassword}>
+          {changingPassword ? 'Changing...' : 'Change password'}
+        </button>
+      </Card>
+    </section>
+  );
+}
+
+function AdminPortalSection({ activePage, showToast, setActivePage = () => {} }) {
+  if (activePage === 'admin-dashboard') {
+    return <AdminDashboardPage showToast={showToast} setActivePage={setActivePage} />;
+  }
+  if (activePage === 'admin-recruiters') return <AdminRecruiterApprovalsPage showToast={showToast} />;
+  if (activePage === 'admin-users') return <AdminUsersPage showToast={showToast} />;
+  if (activePage === 'admin-applications') return <AdminInternalApplicationsPage showToast={showToast} />;
+  if (activePage === 'admin-jobs') return <AdminJobPostingsPage showToast={showToast} />;
+  if (activePage === 'admin-sources') return <AdminJobSourcesPage showToast={showToast} />;
+  if (activePage === 'admin-calendar') return <AdminInterviewsPage showToast={showToast} />;
+  if (activePage === 'admin-reports') return <AdminReportsPage showToast={showToast} />;
+  if (activePage === 'admin-settings') return <AdminSettingsPage showToast={showToast} />;
+
+  return (
+    <section>
+      <PageHeader title="Admin Portal" subtitle="Manage OPUS platform activity." />
+      <Card><EmptyState text="Select a section from the sidebar." /></Card>
+    </section>
+  );
+}
+
+export {
+  AdminPortalSection
+};

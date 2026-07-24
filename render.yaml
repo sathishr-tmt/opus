@@ -1,0 +1,30 @@
+# Render blueprint for OPUS.
+# Builds the frontend, prepares MongoDB indexes, and serves the API + SPA.
+
+services:
+  - type: web
+    name: opus
+    runtime: node
+    plan: free
+    buildCommand: npm install --prefix backend && npm install --prefix frontend && npm run build --prefix frontend
+    startCommand: node backend/db/migrate.js && node backend/server.js
+    healthCheckPath: /api/ready
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAME_SITE
+        value: lax
+      - key: JWT_SECRET
+        generateValue: true
+      - key: APPROVAL_TOKEN_SECRET
+        generateValue: true
+
+      # Set these privately in the Render dashboard:
+      #   MONGODB_URI (your MongoDB Atlas connection string)
+      #   PRIMARY_ADMIN_NAME, PRIMARY_ADMIN_EMAIL, PRIMARY_ADMIN_PASSWORD
+      #   SMTP_USER, SMTP_PASS, EMAIL_FROM_ADDRESS, ADMIN_NOTIFICATION_EMAIL
+      #   FRONTEND_URL, BACKEND_URL (your Render URL)
