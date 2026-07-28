@@ -1,3 +1,5 @@
+import dns from 'node:dns';
+dns.setDefaultResultOrder('ipv4first');
 // OPUS backend entry point — composed from the Step 2 modular split.
 import 'dotenv/config';
 import express from 'express';
