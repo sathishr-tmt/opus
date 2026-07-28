@@ -39,6 +39,35 @@ function getEmailTransporter() {
 }
 
 async function sendEmailSafely({ to, subject, text, html }) {
+  const brevoKey = process.env.BREVO_API_KEY;
+  if (brevoKey && to) {
+    try {
+      const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': brevoKey,
+          'content-type': 'application/json',
+          accept: 'application/json'
+        },
+        body: JSON.stringify({
+          sender: {
+            name: process.env.EMAIL_FROM_NAME || 'OPUS',
+            email: process.env.EMAIL_FROM_ADDRESS || process.env.SMTP_USER
+          },
+          to: [{ email: to }],
+          subject,
+          htmlContent: html,
+          textContent: text
+        })
+      });
+      if (res.ok) return true;
+      console.error(`Brevo API failed for "${subject}":`, res.status, await res.text());
+      return false;
+    } catch (error) {
+      console.error(`Brevo API error for "${subject}":`, error.message);
+      return false;
+    }
+  }
   const transporter = getEmailTransporter();
 
   if (!transporter || !to) {
