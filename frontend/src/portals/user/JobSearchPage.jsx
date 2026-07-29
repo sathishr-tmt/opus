@@ -439,18 +439,23 @@ function JobSearchPage({ onDashboardChange, showToast }) {
             placeholder="Example: 150000"
           />
 
-          <FilterSelect
-            label="Date Posted"
-            value={filters.postedWithinDays}
-            onChange={(value) => updateFilter('postedWithinDays', value)}
-            options={[
-              '1',
-              '3',
-              '7',
-              '14',
-              '30'
-            ]}
-          />
+          {/* Date Posted — LinkedIn-style options. Values are days-old; the
+              backend reads postedWithinDays (empty = Any time / no limit). */}
+          <label className="block">
+            <span className="mb-1.5 block text-[13px] font-bold text-slate-600">
+              Date Posted
+            </span>
+            <select
+              value={filters.postedWithinDays}
+              onChange={(event) => updateFilter('postedWithinDays', event.target.value)}
+              className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[13px] outline-none transition focus:border-violet-500"
+            >
+              <option value="">Any time</option>
+              <option value="1">Past 24 hours</option>
+              <option value="7">Past week</option>
+              <option value="30">Past month</option>
+            </select>
+          </label>
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3">
