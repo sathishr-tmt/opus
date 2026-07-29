@@ -488,6 +488,9 @@ export async function updateInvitation(
   );
 }
 
+export async function deleteInvitation(id) {
+  await AdminInvitation.deleteOne({ _id: String(id) });
+}
 /* ---------- platform jobs ---------- */
 
 const rowToJob = (row) => {

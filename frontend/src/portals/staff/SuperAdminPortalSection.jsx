@@ -2,7 +2,7 @@
 // Dashboard, Admin Invitations, Account Oversight, Role Permissions, Audit Logs,
 // System Health, and System Settings, wired to /api/super-admin/*.
 import { useState, useEffect } from 'react';
-import { Download } from 'lucide-react';
+import { Download, Trash2 } from 'lucide-react';
 import { apiRequest, API_BASE } from '../../lib/api.js';
 import {
   PageHeader, Card, StatTile, Pill, ListItem, DataTable, Field,
@@ -95,6 +95,7 @@ function AdminInvitationsPage({ showToast }) {
   const [email, setEmail] = useState('');
   const [invitations, setInvitations] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [removingId, setRemovingId] = useState('');
 
   useEffect(() => {
     apiRequest('/api/super-admin/admin-invitations')
@@ -121,6 +122,22 @@ function AdminInvitationsPage({ showToast }) {
     }
   }
 
+  async function cancelInvitation(invitation) {
+    if (!window.confirm(`Remove the pending invitation for ${invitation.email}?`)) return;
+    setRemovingId(invitation.id);
+    try {
+      await apiRequest(`/api/super-admin/admin-invitations/${invitation.id}`, {
+        method: 'DELETE'
+      });
+      setInvitations((current) => current.filter((i) => i.id !== invitation.id));
+      showToast('Invitation removed.');
+    } catch (error) {
+      showToast(error.message || 'Unable to remove invitation.');
+    } finally {
+      setRemovingId('');
+    }
+  }
+
   return (
     <section>
       <PageHeader title="Admin Invitations" subtitle="Invite and manage admin accounts." />
@@ -143,13 +160,26 @@ function AdminInvitationsPage({ showToast }) {
       </Card>
       <Card title="Admins & invitations">
         {invitations.length ? (
-          <DataTable headers={['Email', 'Status', 'Expires']}>
+          <DataTable headers={['Email', 'Status', 'Expires', '']}>
             {invitations.map((invitation) => (
               <tr key={invitation.id}>
                 <td className="border-t border-slate-200 px-2.5 py-2.5 text-[13px] font-bold text-slate-900">{invitation.email}</td>
                 <td className="border-t border-slate-200 px-2.5 py-2.5"><Pill>{invitation.status}</Pill></td>
                 <td className="border-t border-slate-200 px-2.5 py-2.5 text-[13px] text-slate-500">
                   {invitation.expiresAt ? new Date(invitation.expiresAt).toLocaleString() : '—'}
+                </td>
+                <td className="border-t border-slate-200 px-2.5 py-2.5 text-right">
+                  {invitation.status === 'pending' ? (
+                    <button
+                      type="button"
+                      disabled={removingId === invitation.id}
+                      onClick={() => cancelInvitation(invitation)}
+                      title="Remove this pending invitation"
+                      className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-slate-500 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  ) : null}
                 </td>
               </tr>
             ))}

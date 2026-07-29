@@ -2,7 +2,7 @@
 import crypto from 'crypto';
 import { FRONTEND_URL, IS_PRODUCTION, ADMIN_INVITATION_TTL_MS } from '../config.js';
 import {
-  findUserByEmail, insertInvitation, listInvitations, addAuditLog, listAuditLogs,
+  findUserByEmail, insertInvitation, listInvitations, deleteInvitation, addAuditLog, listAuditLogs,
   listUsers, countPlatformJobs, countApplications, getReportsSummary,
   listSourceHealth, getSetting
 } from '../repos.js';
@@ -87,6 +87,40 @@ export default function registerSuperAdminRoutes(app) {
       return res.json({
         invitations: invitations.map(({ tokenHash, ...invitation }) => invitation)
       });
+    }
+  );
+
+  app.delete(
+    '/api/super-admin/admin-invitations/:id',
+    requireAuth,
+    requirePermission('account:admin:manage'),
+    async (req, res) => {
+      try {
+        const invitations = await listInvitations();
+        const invitation = invitations.find((i) => i.id === String(req.params.id));
+
+        if (!invitation) {
+          return res.status(404).json({ message: 'Invitation not found.' });
+        }
+
+        if (invitation.status !== 'pending') {
+          return res.status(400).json({ message: 'Only pending invitations can be removed.' });
+        }
+
+        await deleteInvitation(invitation.id);
+
+        await addAuditLog({
+          actorId: req.user.id,
+          actorRole: req.user.role,
+          action: 'ADMIN_INVITATION_DELETED',
+          metadata: { email: invitation.email }
+        });
+
+        return res.json({ message: 'Invitation removed.' });
+      } catch (error) {
+        console.error('Admin invitation delete failed:', error);
+        return res.status(500).json({ message: 'Unable to remove the invitation.' });
+      }
     }
   );
 
