@@ -18,52 +18,37 @@ import { formatMoney } from '../../lib/constants.js';
 import { PageHeader, StatCard, Badge, EmptyState, FilterInput, FilterSelect } from '../../components/ui.jsx';
 
 function JobSearchPage({ onDashboardChange, showToast }) {
-  const careerCategories = [
-    'Backend Developer',
+  // Common job titles offered as dropdown suggestions. The Job Title field is a
+  // combo box: the user can pick one of these OR type any title of their own.
+  const jobTitleOptions = [
+    'Software Engineer',
+    'Software Developer',
     'Frontend Developer',
+    'Backend Developer',
     'Full Stack Developer',
     'Java Developer',
     'Python Developer',
     'React Developer',
-    'Angular Developer',
     'Node.js Developer',
-    'JavaScript Developer',
-    'TypeScript Developer',
-    'Software Developer',
-    'Software Engineer',
-    'API Developer',
-    'Cloud Engineer',
+    'Mobile App Developer',
     'DevOps Engineer',
-    'AWS Developer',
-    'Azure Developer',
+    'Cloud Engineer',
+    'Site Reliability Engineer',
     'Data Engineer',
+    'Data Analyst',
+    'Data Scientist',
     'Machine Learning Engineer',
     'AI Engineer',
-    'LLM Engineer',
     'QA Automation Engineer',
-    'SDET Engineer',
     'Cybersecurity Analyst',
-    'Site Reliability Engineer',
-    'Mobile App Developer',
-    'UI Developer',
-    'Database Developer'
-  ];
-
-  // Adzuna-supported countries (mapped to country codes in the backend).
-  const countryOptions = [
-    'United States',
-    'United Kingdom',
-    'Canada',
-    'Australia',
-    'India',
-    'Germany',
-    'France',
-    'Netherlands',
-    'Italy',
-    'Spain',
-    'Poland',
-    'Singapore',
-    'New Zealand'
+    'Database Administrator',
+    'Business Analyst',
+    'Product Manager',
+    'Project Manager',
+    'UI/UX Designer',
+    'Scrum Master',
+    'Systems Administrator',
+    'Network Engineer'
   ];
 
   // Full list of US states (+ DC). The backend passes this straight to the
@@ -97,8 +82,9 @@ function JobSearchPage({ onDashboardChange, showToast }) {
 
   const emptyFilters = {
     keyword: '',
-    category: '',
-    country: '',
+    // Country is fixed to the United States now that Location is a US-state
+    // dropdown; the backend still receives it and maps it to a country code.
+    country: 'United States',
     state: '',
     jobType: '',
     experienceYears: '',
@@ -213,7 +199,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
   }
 
   async function searchJobs({ refresh = false } = {}) {
-    const searchTerm = filters.keyword.trim() || filters.category || 'developer';
+    const searchTerm = filters.keyword.trim() || 'developer';
     const nextRefreshNumber = refresh ? refreshNumber + 1 : refreshNumber;
 
     setLoading(true);
@@ -367,36 +353,34 @@ function JobSearchPage({ onDashboardChange, showToast }) {
             Search Preferences
           </h2>
           <p className="mt-1 text-sm leading-6 text-slate-500">
-            OPUS keeps the career title as the primary requirement. When exact
+            OPUS keeps the job title as the primary requirement. When exact
             results are limited, it relaxes optional filters in stages and
             shows the change on each result.
           </p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <FilterInput
-            label="Keyword or Job Title"
-            value={filters.keyword}
-            onChange={(value) => updateFilter('keyword', value)}
-            placeholder="Example: Java Spring Boot"
-          />
+          {/* Job Title: a combo box — type any title, or pick from the list. */}
+          <label className="block">
+            <span className="mb-1.5 block text-[13px] font-bold text-slate-600">
+              Job Title
+            </span>
+            <input
+              list="jobTitleOptions"
+              value={filters.keyword}
+              onChange={(event) => updateFilter('keyword', event.target.value)}
+              placeholder="Type a title, or pick from the list"
+              className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[13px] outline-none transition focus:border-violet-500"
+            />
+            <datalist id="jobTitleOptions">
+              {jobTitleOptions.map((title) => (
+                <option key={title} value={title} />
+              ))}
+            </datalist>
+          </label>
 
           <FilterSelect
-            label="Career Category"
-            value={filters.category}
-            onChange={(value) => updateFilter('category', value)}
-            options={careerCategories}
-          />
-
-          <FilterSelect
-            label="Country"
-            value={filters.country}
-            onChange={(value) => updateFilter('country', value)}
-            options={countryOptions}
-          />
-
-          <FilterSelect
-            label="State / Province"
+            label="Location"
             value={filters.state}
             onChange={(value) => updateFilter('state', value)}
             options={stateOptions}
