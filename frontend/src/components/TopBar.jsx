@@ -32,7 +32,7 @@ function TopBar({ showToast, gmailStatus, currentUser, setActivePage, onLogout, 
   }
 
   return (
-    <header className="fixed inset-x-0 top-0 z-30 flex h-[84px] items-center gap-3 border-b border-slate-200 bg-white/95 px-6 backdrop-blur">
+    <header className="fixed inset-x-0 top-0 z-30 flex h-[84px] items-center gap-3 border-b border-slate-200 bg-white/90 px-6 backdrop-blur">
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center gap-2">
           <OpusMark size={30} />
