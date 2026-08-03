@@ -474,6 +474,17 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-50">
+      <TopBar
+        showToast={showToast}
+        gmailStatus={gmailStatus}
+        currentUser={currentUser}
+        setActivePage={setActivePage}
+        onLogout={handleLogout}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onToggleSidebar={() => setSidebarOpen((value) => !value)}
+      />
+
       <Sidebar
         activePage={activePage}
         setActivePage={setActivePage}
@@ -482,18 +493,7 @@ function App() {
         open={sidebarOpen}
       />
 
-      <main className={`min-h-screen transition-all duration-300 ${sidebarOpen ? 'ml-60' : 'ml-0'}`}>
-        <TopBar
-          showToast={showToast}
-          gmailStatus={gmailStatus}
-          currentUser={currentUser}
-          setActivePage={setActivePage}
-          onLogout={handleLogout}
-          theme={theme}
-          onToggleTheme={toggleTheme}
-          onToggleSidebar={() => setSidebarOpen((value) => !value)}
-        />
-
+      <main className={`min-h-screen pt-[84px] transition-all duration-300 ${sidebarOpen ? 'ml-60' : 'ml-0'}`}>
         <div className="px-7 py-6">
           {activePage === 'help' && (
             <HelpSupportPage currentUser={currentUser} />

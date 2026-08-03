@@ -1,7 +1,8 @@
-// Sidebar — compact prototype design (OPUS mark, flat nav, sign-out at bottom).
+// Sidebar — menu only (the OPUS logo now lives in the top header). It sits
+// below the header and collapses to zero width so the content widens. The
+// three-line button in the header toggles `open`.
 import { HelpCircle, LogOut } from 'lucide-react';
 import { userNavItems, recruiterNavItems, adminNavItems, superAdminNavItems } from '../lib/constants.js';
-import { OpusMark } from './Logo.jsx';
 
 function Sidebar({ activePage, setActivePage, currentUser, onLogout, badges = {}, open = true }) {
   const role = currentUser?.role || 'user';
@@ -14,15 +15,6 @@ function Sidebar({ activePage, setActivePage, currentUser, onLogout, badges = {}
       : role === 'recruiter'
       ? recruiterNavItems
       : userNavItems;
-
-  const roleTag =
-    role === 'super_admin'
-      ? 'Super Admin'
-      : role === 'admin'
-      ? 'Admin'
-      : role === 'recruiter'
-      ? 'Recruiter'
-      : '';
 
   function NavButton({ id, label, icon: Icon, badge }) {
     const active = activePage === id;
@@ -48,21 +40,11 @@ function Sidebar({ activePage, setActivePage, currentUser, onLogout, badges = {}
 
   return (
     <aside
-      className={`fixed left-0 top-0 z-20 flex h-screen w-60 flex-col border-r border-slate-200 bg-white px-3.5 py-4 transition-transform duration-300 ${
-        open ? 'translate-x-0' : '-translate-x-full'
+      className={`fixed left-0 top-[84px] bottom-0 z-20 overflow-hidden border-r border-slate-200 bg-white transition-all duration-300 ${
+        open ? 'w-60' : 'w-0 border-r-0'
       }`}
     >
-      <div className="mb-4 flex items-center gap-2 px-2">
-        <OpusMark size={34} />
-        <span className="text-lg font-extrabold text-slate-900">OPUS</span>
-        {roleTag && (
-          <span className="rounded-md bg-violet-50 px-1.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-violet-700">
-            {roleTag}
-          </span>
-        )}
-      </div>
-
-      <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto">
+      <nav className="flex h-full w-60 flex-col gap-0.5 overflow-y-auto px-3.5 py-4">
         {navItems.map((item) => (
           <NavButton key={item.id} {...item} badge={badges[item.id]} />
         ))}
