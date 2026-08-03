@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   ArrowRight,
-  CheckCircle2,
   Eye,
   EyeOff,
   Lock,
@@ -87,6 +86,32 @@ export default function Login({
     }
   }
 
+  // A small preview of ranked matches shown on the branding panel — it conveys
+  // the product's value without listing features in words.
+  const previewJobs = [
+    {
+      title: 'Backend Developer',
+      meta: 'Austin, Texas · Onsite · Full-time',
+      score: '92%',
+      tag: 'Exact',
+      scoreClass: 'bg-emerald-500/20 text-emerald-200'
+    },
+    {
+      title: 'Full Stack Engineer',
+      meta: 'Dallas, Texas · Hybrid · Full-time',
+      score: '78%',
+      tag: 'Strong',
+      scoreClass: 'bg-sky-500/20 text-sky-200'
+    },
+    {
+      title: 'Python Developer',
+      meta: 'Houston, Texas · Remote · Contract',
+      score: '64%',
+      tag: 'Nearby',
+      scoreClass: 'bg-amber-500/20 text-amber-200'
+    }
+  ];
+
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="grid min-h-screen lg:grid-cols-[1.05fr_0.95fr]">
@@ -100,7 +125,7 @@ export default function Login({
                   OPUS
                 </h1>
                 <p className="mt-1 text-sm font-bold text-slate-400">
-                  Smart job application dashboard
+                  Smart job application
                 </p>
               </div>
             </div>
@@ -116,37 +141,32 @@ export default function Login({
                 Organize your job search with clarity and control.
               </h2>
 
-              <div className="mt-8 grid gap-4">
-                <div className="flex items-center gap-3 rounded-2xl bg-white/10 p-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/20 text-violet-100">
-                    <CheckCircle2 size={20} />
+              <div className="mt-8 grid gap-3">
+                {previewJobs.map((job) => (
+                  <div
+                    key={job.title}
+                    className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/10 p-4"
+                  >
+                    <div
+                      className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-sm font-black ${job.scoreClass}`}
+                    >
+                      {job.score}
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-black text-white">
+                        {job.title}
+                      </p>
+                      <p className="truncate text-xs font-bold text-slate-400">
+                        {job.meta}
+                      </p>
+                    </div>
+
+                    <span className="ml-auto shrink-0 rounded-full border border-violet-300/40 bg-violet-500/20 px-3 py-1 text-[11px] font-black text-violet-100">
+                      {job.tag}
+                    </span>
                   </div>
-
-                  <p className="text-sm font-bold text-slate-200">
-                    Track applications, interviews, offers, and saved jobs.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-3 rounded-2xl bg-white/10 p-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/20 text-violet-100">
-                    <CheckCircle2 size={20} />
-                  </div>
-
-                  <p className="text-sm font-bold text-slate-200">
-                    Search jobs using filters like role, location, salary,
-                    and status.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-3 rounded-2xl bg-white/10 p-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/20 text-violet-100">
-                    <CheckCircle2 size={20} />
-                  </div>
-
-                  <p className="text-sm font-bold text-slate-200">
-                    Manage your career workflow from one clean dashboard.
-                  </p>
-                </div>
+                ))}
               </div>
             </div>
           </div>
@@ -179,11 +199,6 @@ export default function Login({
                 <h2 className="text-3xl font-black text-slate-950">
                   Login to your account
                 </h2>
-
-                <p className="mt-2 text-sm font-medium text-slate-500">
-                  Job seekers, recruiters, and administrators sign in here. We
-                  open the portal that matches your account.
-                </p>
               </div>
 
               {approvalNotice && (
@@ -323,11 +338,6 @@ export default function Login({
                 </p>
               </div>
             </div>
-
-            <p className="mt-5 text-center text-xs font-semibold text-slate-400">
-              Recruiter accounts need admin approval. Admin accounts are created
-              by invitation only.
-            </p>
           </div>
         </section>
       </div>
