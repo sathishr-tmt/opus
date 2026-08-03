@@ -3,7 +3,7 @@ import { HelpCircle, LogOut } from 'lucide-react';
 import { userNavItems, recruiterNavItems, adminNavItems, superAdminNavItems } from '../lib/constants.js';
 import { OpusMark } from './Logo.jsx';
 
-function Sidebar({ activePage, setActivePage, currentUser, onLogout, badges = {} }) {
+function Sidebar({ activePage, setActivePage, currentUser, onLogout, badges = {}, open = true }) {
   const role = currentUser?.role || 'user';
 
   const navItems =
@@ -47,7 +47,11 @@ function Sidebar({ activePage, setActivePage, currentUser, onLogout, badges = {}
   }
 
   return (
-    <aside className="fixed left-0 top-0 z-20 flex h-screen w-60 flex-col border-r border-slate-200 bg-white px-3.5 py-4">
+    <aside
+      className={`fixed left-0 top-0 z-20 flex h-screen w-60 flex-col border-r border-slate-200 bg-white px-3.5 py-4 transition-transform duration-300 ${
+        open ? 'translate-x-0' : '-translate-x-full'
+      }`}
+    >
       <div className="mb-4 flex items-center gap-2 px-2">
         <OpusMark size={34} />
         <span className="text-lg font-extrabold text-slate-900">OPUS</span>

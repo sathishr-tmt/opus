@@ -34,6 +34,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [theme, setThemeState] = useState(resolveInitialTheme);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // Apply the theme to <html> whenever it changes.
   useEffect(() => {
@@ -478,9 +479,10 @@ function App() {
         setActivePage={setActivePage}
         currentUser={currentUser}
         onLogout={handleLogout}
+        open={sidebarOpen}
       />
 
-      <main className="ml-60 min-h-screen">
+      <main className={`min-h-screen transition-all duration-300 ${sidebarOpen ? 'ml-60' : 'ml-0'}`}>
         <TopBar
           showToast={showToast}
           gmailStatus={gmailStatus}
@@ -489,6 +491,7 @@ function App() {
           onLogout={handleLogout}
           theme={theme}
           onToggleTheme={toggleTheme}
+          onToggleSidebar={() => setSidebarOpen((value) => !value)}
         />
 
         <div className="px-7 py-6">
