@@ -1,9 +1,11 @@
 // Extracted from the original frontend/src/App.jsx during the Step 4 modular split.
-// Code is moved unchanged; only imports/exports were added.
+// Adds resume auto-fill: on upload (or via the "Fill from resume" button) the
+// resume is analyzed by the backend (Gemini) and the profile fields are filled.
 
 import { useState, useEffect } from 'react';
 import {
-  FileText
+  FileText,
+  Sparkles
 } from 'lucide-react';
 import { apiRequest, API_BASE } from '../../lib/api.js';
 import { PageHeader, FilterInput, FilterSelect } from '../../components/ui.jsx';
@@ -24,6 +26,7 @@ function ProfileResumePage({ onDashboardChange, showToast, currentUser }) {
   });
   const [resumeDocs, setResumeDocs] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
 
   async function loadResumes() {
     try {
@@ -34,6 +37,44 @@ function ProfileResumePage({ onDashboardChange, showToast, currentUser }) {
     }
   }
   useEffect(() => { loadResumes(); }, []);
+
+  // Read the uploaded resume with AI and drop the details into the form. The
+  // user still reviews and clicks Save. Fields the resume doesn't reveal are
+  // left untouched. Silently no-ops if AI analysis isn't configured.
+  async function analyzeAndFill({ announce = true } = {}) {
+    setAnalyzing(true);
+    try {
+      const data = await apiRequest('/api/profile/resume/analyze', { method: 'POST' });
+      const fields = data.fields || {};
+
+      const skills = Array.isArray(fields.skills)
+        ? fields.skills.filter(Boolean).join(', ')
+        : (typeof fields.skills === 'string' ? fields.skills : '');
+
+      setProfile((previous) => ({
+        ...previous,
+        professionalTitle: fields.professionalTitle || previous.professionalTitle,
+        experienceYears:
+          Number(fields.experienceYears) > 0
+            ? String(fields.experienceYears)
+            : previous.experienceYears,
+        location: fields.location || previous.location,
+        phone: fields.phone || previous.phone,
+        skills: skills || previous.skills,
+        about: fields.professionalSummary || previous.about
+      }));
+
+      if (announce) {
+        showToast('Profile filled from your resume — review and Save.');
+      }
+    } catch (error) {
+      if (announce) {
+        showToast(error.message || 'Could not read the resume. You can fill the details manually.');
+      }
+    } finally {
+      setAnalyzing(false);
+    }
+  }
 
   async function uploadResume(file) {
     if (!file) return;
@@ -52,8 +93,10 @@ function ProfileResumePage({ onDashboardChange, showToast, currentUser }) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || 'Upload failed.');
-      showToast('Resume uploaded.');
-      loadResumes();
+      showToast('Resume uploaded — reading your details...');
+      await loadResumes();
+      // Auto-fill the profile straight after a successful upload.
+      await analyzeAndFill();
     } catch (error) {
       showToast(error.message || 'Upload failed.');
     } finally {
@@ -200,8 +243,8 @@ function ProfileResumePage({ onDashboardChange, showToast, currentUser }) {
 
           <h2 className="mt-4 text-lg font-black text-slate-900">Resume</h2>
           <p className="mt-2 text-sm leading-6 text-slate-500">
-            Upload your resume (PDF, DOC, or DOCX, up to 5 MB). It is stored
-            securely and only shared with recruiters assigned to your applications.
+            Upload your resume (PDF, DOC, or DOCX, up to 5 MB). Your profile
+            details fill in automatically from it — just review and Save.
           </p>
 
           <label className="mt-5 block cursor-pointer rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
@@ -209,31 +252,47 @@ function ProfileResumePage({ onDashboardChange, showToast, currentUser }) {
               type="file"
               accept=".pdf,.doc,.docx"
               className="hidden"
-              disabled={uploading}
+              disabled={uploading || analyzing}
               onChange={(event) => uploadResume(event.target.files?.[0])}
             />
             <FileText className="mx-auto text-slate-400" size={28} />
             <p className="mt-3 text-sm font-black text-slate-700">
-              {uploading ? 'Uploading...' : 'Choose Resume'}
+              {uploading
+                ? 'Uploading...'
+                : analyzing
+                ? 'Reading your resume...'
+                : 'Choose Resume'}
             </p>
             <p className="mt-1 text-xs text-slate-400">PDF, DOC, or DOCX</p>
           </label>
 
           {resumeDocs.length > 0 && (
-            <div className="mt-4 grid gap-2">
-              {resumeDocs.map((doc) => (
-                <div key={doc.id} className="flex items-center justify-between rounded-2xl bg-green-50 p-4 text-sm font-bold text-green-700">
-                  <span>{doc.originalName}</span>
-                  <button
-                    type="button"
-                    onClick={() => window.open(`${API_BASE}/api/documents/${doc.id}/download`, '_blank')}
-                    className="rounded-lg bg-green-600 px-3 py-1 text-xs font-black text-white"
-                  >
-                    Download
-                  </button>
-                </div>
-              ))}
-            </div>
+            <>
+              <div className="mt-4 grid gap-2">
+                {resumeDocs.map((doc) => (
+                  <div key={doc.id} className="flex items-center justify-between rounded-2xl bg-green-50 p-4 text-sm font-bold text-green-700">
+                    <span>{doc.originalName}</span>
+                    <button
+                      type="button"
+                      onClick={() => window.open(`${API_BASE}/api/documents/${doc.id}/download`, '_blank')}
+                      className="rounded-lg bg-green-600 px-3 py-1 text-xs font-black text-white"
+                    >
+                      Download
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => analyzeAndFill()}
+                disabled={analyzing || uploading}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-black text-violet-700 transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Sparkles size={16} />
+                {analyzing ? 'Reading resume...' : 'Fill profile from resume'}
+              </button>
+            </>
           )}
         </div>
       </div>
