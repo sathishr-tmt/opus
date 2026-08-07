@@ -1,8 +1,3 @@
-# Optional local MongoDB service for OPUS.
-# Start:  docker compose up -d db
-# Stop:   docker compose down
-# Data persists in the named volume.
-
 services:
   db:
     image: mongo:8.0
@@ -18,5 +13,49 @@ services:
       timeout: 3s
       retries: 10
 
+  # Antivirus scanner. Takes a few minutes on first start to download its
+  # virus database, then stays ready. The app talks to it on port 3310.
+  clamav:
+    image: clamav/clamav:latest
+    container_name: opus-clamav
+    restart: unless-stopped
+    ports:
+      - "3310:3310"
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 300s
+
+  app:
+    build: .
+    container_name: opus-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      clamav:
+        condition: service_started
+    ports:
+      - "5000:5000"
+    env_file:
+      - backend/.env
+    environment:
+      NODE_ENV: production
+      PORT: "5000"
+      MONGODB_URI: "mongodb://db:27017/opus"
+      COOKIE_SECURE: "true"
+      COOKIE_SAME_SITE: "lax"
+      FRONTEND_URL: "http://localhost:5000"
+      BACKEND_URL: "http://localhost:5000"
+      # Virus scanning (local/Docker only; leave unset on Render to disable):
+      CLAMAV_ENABLED: "true"
+      CLAMAV_HOST: "clamav"
+      CLAMAV_PORT: "3310"
+    volumes:
+      - opus_uploads:/app/backend/uploads
+
 volumes:
   opus_mongodb_data:
+  opus_uploads:

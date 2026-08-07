@@ -12,6 +12,7 @@ import { requireAuth, requireRole } from '../security.js';
 import { getJob } from '../jobCache.js';
 import { buildTailoredResume, tailoredFileName } from '../resumeBuilder.js';
 import { verifyResumeFile, removeFile } from '../fileGuard.js';
+import { scanFile } from '../virusScan.js';
 import { scoreJob } from '../ats.js';
 import { geminiConfigured } from '../gemini.js';
 import { analyzeResume, rewriteResume } from '../resumeAI.js';
@@ -84,6 +85,13 @@ export default function registerDocumentRoutes(app) {
         if (!verdict.ok) {
           removeFile(path.join(UPLOAD_DIR, req.file.filename));
           return res.status(400).json({ message: verdict.reason });
+        }
+
+        // Antivirus scan (only runs when CLAMAV_ENABLED=true).
+        const scan = await scanFile(path.join(UPLOAD_DIR, req.file.filename));
+        if (!scan.ok) {
+          removeFile(path.join(UPLOAD_DIR, req.file.filename));
+          return res.status(400).json({ message: scan.reason });
         }
 
         // Remove previous resumes (keep one current resume per user).
