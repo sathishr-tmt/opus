@@ -6,6 +6,14 @@ import {
   PageHeader, Card, StatTile, Pill, ListItem, DataTable,
   inputClass, btnSmClass, EmptyState
 } from '../../components/ui.jsx';
+import { StatusDonut, BarComparison } from '../../components/charts.jsx';
+
+const ROLE_LABELS = {
+  user: 'Users',
+  recruiter: 'Recruiters',
+  admin: 'Admins',
+  super_admin: 'Super Admins'
+};
 
 function statusLabel(status) {
   if (status === 'pending_admin_approval' || status === 'pending_super_admin_approval') {
@@ -17,7 +25,7 @@ function statusLabel(status) {
 function AdminDashboardPage({ showToast, setActivePage }) {
   const [overview, setOverview] = useState(null);
   const [pending, setPending] = useState([]);
-  const [unassigned, setUnassigned] = useState([]);
+  const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,7 +38,7 @@ function AdminDashboardPage({ showToast, setActivePage }) {
         ]);
         setOverview(overviewData);
         setPending((pendingData.users || []).filter((u) => u.role === 'recruiter'));
-        setUnassigned((appsData.applications || []).filter((a) => !a.assignedRecruiterId));
+        setApplications(appsData.applications || []);
       } catch (error) {
         showToast(error.message || 'Failed to load admin dashboard.');
       } finally {
@@ -39,6 +47,23 @@ function AdminDashboardPage({ showToast, setActivePage }) {
     }
     load();
   }, []);
+
+  const unassigned = applications.filter((a) => !a.assignedRecruiterId);
+
+  // Accounts by role donut, from the real role breakdown.
+  const usersByRole = overview?.usersByRole || {};
+  const roleDonut = Object.entries(usersByRole)
+    .map(([role, value]) => ({ name: ROLE_LABELS[role] || role, value }))
+    .filter((d) => d.value > 0);
+
+  // Applications by status bar, from the real internal-applications list.
+  const statusCounts = applications.reduce((acc, application) => {
+    const status = application.status || 'Applied';
+    acc[status] = (acc[status] || 0) + 1;
+    return acc;
+  }, {});
+  const statusCategories = Object.keys(statusCounts);
+  const statusValues = statusCategories.map((status) => statusCounts[status]);
 
   return (
     <section>
@@ -49,6 +74,22 @@ function AdminDashboardPage({ showToast, setActivePage }) {
         <StatTile label="Job postings" value={overview?.totalJobs ?? 0} />
         <StatTile label="Applications" value={overview?.totalApplications ?? 0} />
       </div>
+
+      {!loading && (roleDonut.length > 0 || statusCategories.length > 0) && (
+        <div className="mb-3.5 grid gap-3.5 lg:grid-cols-2">
+          {roleDonut.length > 0 && (
+            <Card title="Accounts by role">
+              <StatusDonut data={roleDonut} height={240} />
+            </Card>
+          )}
+          {statusCategories.length > 0 && (
+            <Card title="Applications by status">
+              <BarComparison categories={statusCategories} data={statusValues} height={240} />
+            </Card>
+          )}
+        </div>
+      )}
+
       <div className="grid gap-3.5 lg:grid-cols-2">
         <Card
           title="Recruiters awaiting approval"

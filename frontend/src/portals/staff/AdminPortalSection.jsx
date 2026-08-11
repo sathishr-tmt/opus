@@ -3,9 +3,10 @@
 import { useState, useEffect } from 'react';
 import { RefreshCw, Download } from 'lucide-react';
 import {
-  PageHeader, Card, Pill, ListItem, MonthCalendar, Field,
+  PageHeader, Card, StatTile, Pill, ListItem, MonthCalendar, Field,
   inputClass, btnClass, btnSmClass, btnPrimaryClass, EmptyState
 } from '../../components/ui.jsx';
+import { StatusDonut, BarComparison, HealthGauge } from '../../components/charts.jsx';
 import { apiRequest, API_BASE } from '../../lib/api.js';
 import { AdminDashboardPage, AdminRecruiterApprovalsPage, AdminUsersPage } from './AdminPage.jsx';
 import { AdminInternalApplicationsPage } from './AdminInternalApplicationsPage.jsx';
@@ -128,9 +129,28 @@ function AdminJobSourcesPage({ showToast }) {
     }
   }
 
+  // Health summary from the real source list.
+  const total = sources.length;
+  const healthy = sources.filter((s) => s.ok).length;
+  const healthPct = total ? Math.round((healthy / total) * 100) : 0;
+
   return (
     <section>
       <PageHeader title="Job Sources" subtitle="Monitor external job feeds and health." />
+
+      {total > 0 && (
+        <div className="mb-3.5 grid gap-3.5 lg:grid-cols-[1fr_1.6fr]">
+          <Card title="Overall source health">
+            <HealthGauge value={healthPct} color={healthPct >= 80 ? '#16a34a' : healthPct >= 50 ? '#d97706' : '#dc2626'} height={190} />
+          </Card>
+          <div className="grid grid-cols-3 gap-3.5">
+            <StatTile label="Enabled" value={total} />
+            <StatTile label="Healthy" value={healthy} />
+            <StatTile label="Failing" value={total - healthy} />
+          </div>
+        </div>
+      )}
+
       <Card
         title="Job sources & health"
         action={
@@ -275,6 +295,24 @@ function AdminReportsPage({ showToast }) {
     { title: 'Platform summary (PDF)', meta: 'High-level metrics for a period', label: 'PDF', path: '/api/exports/admin/report.pdf' }
   ];
 
+  // Aggregate the report summary into chart-ready data.
+  const appByStatus = {};
+  (summary?.applications || []).forEach((row) => {
+    const status = row.status || row.kind || 'Unknown';
+    appByStatus[status] = (appByStatus[status] || 0) + (row.c || 0);
+  });
+  const appDonut = Object.entries(appByStatus)
+    .map(([name, value]) => ({ name, value }))
+    .filter((d) => d.value > 0);
+
+  const userByRole = {};
+  (summary?.users || []).forEach((row) => {
+    const role = row.role || 'user';
+    userByRole[role] = (userByRole[role] || 0) + (row.c || 0);
+  });
+  const roleCategories = Object.keys(userByRole);
+  const roleValues = roleCategories.map((role) => userByRole[role]);
+
   function Group({ title, rows, keys }) {
     return (
       <Card title={title}>
@@ -291,6 +329,22 @@ function AdminReportsPage({ showToast }) {
   return (
     <section>
       <PageHeader title="Reports" subtitle="Download platform data and summaries." />
+
+      {summary && (appDonut.length > 0 || roleCategories.length > 0) && (
+        <div className="mb-3.5 grid gap-3.5 lg:grid-cols-2">
+          {appDonut.length > 0 && (
+            <Card title="Applications by status">
+              <StatusDonut data={appDonut} height={240} />
+            </Card>
+          )}
+          {roleCategories.length > 0 && (
+            <Card title="Users by role">
+              <BarComparison categories={roleCategories} data={roleValues} height={240} />
+            </Card>
+          )}
+        </div>
+      )}
+
       <Card title="Reports & exports">
         <p className="mb-3.5 text-[13px] text-slate-500">
           Download platform data for offline review and sharing.

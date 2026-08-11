@@ -4,7 +4,9 @@
 //  - Applied entries cannot be rewritten; the application was already sent.
 //  - Loads 20 at a time; "View all" pulls in the next 20.
 //  - Every entry can be deleted so the list stays manageable.
+//  - Filter chips narrow by kind or applied-status; Export downloads a CSV.
 import { useState, useEffect } from 'react';
+import { Download } from 'lucide-react';
 import { apiRequest } from '../../lib/api.js';
 import {
   PageHeader, Card, StatTile, Pill, EmptyState,
@@ -21,6 +23,17 @@ const APPLIED_STATUSES = [
   'Final Interview',
   'Offer',
   'Rejected'
+];
+
+// Quick filters shown as chips above the list.
+const FILTER_CHIPS = [
+  ['all', 'All'],
+  ['saved', 'Saved'],
+  ['applied', 'Applied'],
+  ['Under Review', 'Under Review'],
+  ['Technical Interview', 'Interview'],
+  ['Offer', 'Offer'],
+  ['Rejected', 'Rejected']
 ];
 
 function MyJobEntry({ entry, onRewrite, onDelete, onStatusChange, onApply, busyId }) {
@@ -223,15 +236,58 @@ function MyApplicationsPage({ onDashboardChange, showToast }) {
     }
   }
 
-  const visible = entries.filter((entry) =>
-    filter === 'all' ? true : entry.kind === filter
-  );
+  // Export whatever is currently loaded to a CSV file (client-side).
+  function exportCsv() {
+    if (!entries.length) {
+      showToast('Nothing to export yet.');
+      return;
+    }
+    const header = ['Title', 'Company', 'Location', 'Work Mode', 'Type', 'Status', 'ATS %'];
+    const rows = entries.map((e) => [
+      e.title || '',
+      e.company || '',
+      e.location || '',
+      e.workMode || '',
+      e.kind === 'saved' ? 'Saved' : 'Applied',
+      e.kind === 'saved' ? 'Saved' : e.status || '',
+      e.atsScore != null ? e.atsScore : ''
+    ]);
+    const csv = [header, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'opus-my-applications.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast('Exported CSV.');
+  }
+
+  const visible = entries.filter((entry) => {
+    if (filter === 'all') return true;
+    if (filter === 'saved') return entry.kind === 'saved';
+    if (filter === 'applied') return entry.kind === 'applied';
+    // Otherwise the filter is a specific applied status.
+    return entry.kind === 'applied' && entry.status === filter;
+  });
 
   return (
     <section>
       <PageHeader
         title="My Applications"
         subtitle="Everything you saved or applied to. Saved jobs can still be tailored."
+        action={
+          <button className={btnClass} onClick={exportCsv}>
+            <span className="inline-flex items-center gap-2">
+              <Download size={15} /> Export CSV
+            </span>
+          </button>
+        }
       />
 
       <div className="mb-4 grid gap-3.5 md:grid-cols-3">
@@ -240,20 +296,27 @@ function MyApplicationsPage({ onDashboardChange, showToast }) {
         <StatTile label="Total" value={meta.total} />
       </div>
 
-      <Card
-        title={`Showing ${visible.length} of ${meta.total}`}
-        action={
-          <select
-            value={filter}
-            onChange={(event) => setFilter(event.target.value)}
-            className={`${inputClass} w-[150px]`}
-          >
-            <option value="all">All</option>
-            <option value="saved">Saved only</option>
-            <option value="applied">Applied only</option>
-          </select>
-        }
-      >
+      {/* Filter chips */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        {FILTER_CHIPS.map(([value, label]) => {
+          const on = filter === value;
+          return (
+            <button
+              key={value}
+              onClick={() => setFilter(value)}
+              className={`rounded-full border px-3 py-1.5 text-[12.5px] font-bold transition ${
+                on
+                  ? 'border-violet-300 bg-violet-50 text-violet-700'
+                  : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      <Card title={`Showing ${visible.length} of ${meta.total}`}>
         {loading ? (
           <EmptyState text="Loading your jobs..." />
         ) : visible.length ? (
@@ -279,7 +342,7 @@ function MyApplicationsPage({ onDashboardChange, showToast }) {
             )}
           </>
         ) : (
-          <EmptyState text="Nothing here yet. Save or apply to a job from Job Search." />
+          <EmptyState text="Nothing matches this filter yet." />
         )}
       </Card>
     </section>

@@ -6,11 +6,18 @@ import {
   PageHeader, Card, StatTile, Pill, ListItem, Field, MonthCalendar,
   inputClass, btnClass, btnPrimaryClass, btnSmClass, EmptyState
 } from '../../components/ui.jsx';
+import { StatusDonut, RecruitmentFunnel } from '../../components/charts.jsx';
 
 const CANDIDATE_STATUSES = [
   'Applied', 'Under Review', 'Online Assessment', 'Technical Interview',
   'Final Interview', 'Offer', 'Rejected', 'Withdrawn'
 ];
+
+// Progression order used to build the recruitment funnel from real statuses.
+const STATUS_ORDER = {
+  Applied: 0, 'Under Review': 1, 'Online Assessment': 2,
+  'Technical Interview': 3, 'Final Interview': 4, Offer: 5
+};
 
 function formatWhen(startsAt) {
   if (!startsAt) return 'Unscheduled';
@@ -271,6 +278,25 @@ function RecruiterPortalPage({ activePage, currentUser, showToast }) {
     .filter((entry) => entry.interview);
 
   if (activePage === 'recruiter-dashboard') {
+    // Build the status donut and recruitment funnel from real applications.
+    const statusCounts = applications.reduce((acc, application) => {
+      const status = application.status || 'Applied';
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {});
+    const donutData = Object.entries(statusCounts).map(([name, value]) => ({ name, value }));
+
+    const total = applications.length;
+    const reached = (minIndex) =>
+      applications.filter((a) => (STATUS_ORDER[a.status] ?? -1) >= minIndex).length;
+    const funnelData = [
+      { name: 'Assigned', value: total },
+      { name: 'Reviewed', value: reached(1) },
+      { name: 'Assessment', value: reached(2) },
+      { name: 'Interview', value: reached(3) },
+      { name: 'Offer', value: reached(5) }
+    ];
+
     return (
       <section>
         <PageHeader title="Dashboard" subtitle="Your postings and assigned candidates." />
@@ -280,6 +306,18 @@ function RecruiterPortalPage({ activePage, currentUser, showToast }) {
           <StatTile label="Assigned candidates" value={overview?.counts?.assignedApplications ?? applications.length} />
           <StatTile label="Interviews" value={overview?.counts?.upcomingInterviews ?? interviews.length} />
         </div>
+
+        {total > 0 && (
+          <div className="mb-4 grid gap-3.5 lg:grid-cols-2">
+            <Card title="Candidate status">
+              <StatusDonut data={donutData} height={240} />
+            </Card>
+            <Card title="Recruitment funnel">
+              <RecruitmentFunnel data={funnelData} height={240} />
+            </Card>
+          </div>
+        )}
+
         <Card title="Assigned candidates">
           {loading ? (
             <EmptyState text="Loading..." />

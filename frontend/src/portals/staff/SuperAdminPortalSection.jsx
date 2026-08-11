@@ -8,6 +8,7 @@ import {
   PageHeader, Card, StatTile, Pill, ListItem, DataTable, Field,
   inputClass, btnSmClass, btnPrimaryClass, EmptyState
 } from '../../components/ui.jsx';
+import { StatusDonut, HealthGauge } from '../../components/charts.jsx';
 import { formatRoleLabel } from '../../lib/constants.js';
 
 function downloadUrl(path) {
@@ -38,6 +39,22 @@ function SuperAdminDashboard({ showToast, setActivePage }) {
   const pendingInvites = invitations.filter((i) => i.status === 'pending').length;
   const admins = (accounts?.accounts || []).filter((a) => a.role === 'admin');
 
+  // Accounts by role donut, from the real totals.
+  const totals = accounts?.totals || {};
+  const roleDonut = [
+    ['super_admin', 'Super Admins'],
+    ['admin', 'Admins'],
+    ['recruiter', 'Recruiters'],
+    ['user', 'Users']
+  ]
+    .map(([key, label]) => ({ name: label, value: totals[key] || 0 }))
+    .filter((d) => d.value > 0);
+
+  // Job-source health gauge, from the real system-health data.
+  const sources = health?.sources || [];
+  const srcHealthy = sources.filter((s) => s.ok).length;
+  const srcPct = sources.length ? Math.round((srcHealthy / sources.length) * 100) : 0;
+
   return (
     <section>
       <PageHeader title="Dashboard" subtitle="Platform-wide control and oversight." />
@@ -49,6 +66,29 @@ function SuperAdminDashboard({ showToast, setActivePage }) {
         <StatTile label="Pending invites" value={pendingInvites} />
         <StatTile label="Total accounts" value={(accounts?.accounts || []).length} />
       </div>
+
+      {(roleDonut.length > 0 || sources.length > 0) && (
+        <div className="mb-3.5 grid gap-3.5 lg:grid-cols-2">
+          {roleDonut.length > 0 && (
+            <Card title="Accounts by role">
+              <StatusDonut data={roleDonut} height={240} />
+            </Card>
+          )}
+          {sources.length > 0 && (
+            <Card title="Job-source health">
+              <HealthGauge
+                value={srcPct}
+                color={srcPct >= 80 ? '#16a34a' : srcPct >= 50 ? '#d97706' : '#dc2626'}
+                height={220}
+              />
+              <p className="text-center text-[13px] text-slate-500">
+                {srcHealthy} of {sources.length} sources healthy
+              </p>
+            </Card>
+          )}
+        </div>
+      )}
+
       <div className="grid gap-3.5 lg:grid-cols-2">
         <Card
           title="Admin team"
@@ -420,9 +460,31 @@ function SystemHealth({ showToast }) {
     );
   }
 
+  const sources = data.sources || [];
+  const srcHealthy = sources.filter((s) => s.ok).length;
+  const srcPct = sources.length ? Math.round((srcHealthy / sources.length) * 100) : 0;
+
   return (
     <section>
       <PageHeader title="System Health" subtitle="Database, email, and job sources." />
+
+      {sources.length > 0 && (
+        <div className="mb-3.5 grid gap-3.5 lg:grid-cols-[1fr_2fr]">
+          <Card title="Source health">
+            <HealthGauge
+              value={srcPct}
+              color={srcPct >= 80 ? '#16a34a' : srcPct >= 50 ? '#d97706' : '#dc2626'}
+              height={190}
+            />
+          </Card>
+          <div className="grid grid-cols-3 gap-3.5">
+            <StatTile label="Sources" value={sources.length} />
+            <StatTile label="Healthy" value={srcHealthy} />
+            <StatTile label="Failing" value={sources.length - srcHealthy} />
+          </div>
+        </div>
+      )}
+
       <Card title="System health">
         <div className="grid gap-3.5 md:grid-cols-2">
           <ListItem
@@ -442,7 +504,7 @@ function SystemHealth({ showToast }) {
         </div>
       </Card>
       <Card title="Job sources">
-        {(data.sources || []).length ? data.sources.map((s) => (
+        {sources.length ? sources.map((s) => (
           <ListItem
             key={s.source}
             title={s.source}
@@ -548,7 +610,7 @@ function ApprovalsPage({ showToast }) {
     setBusy(user.id);
     try {
       await apiRequest(`/api/admin/users/${user.id}/approve`, { method: 'PATCH' });
-      showToast(`${user.name} approved \u2014 they can now sign in.`);
+      showToast(`${user.name} approved — they can now sign in.`);
       setPending((prev) => (prev || []).filter((u) => u.id !== user.id));
     } catch (error) {
       showToast(error.message || 'Unable to approve account.');

@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { apiRequest } from '../../lib/api.js';
 import { PageHeader, StatCard, Badge, EmptyState, Pill, btnPrimaryClass } from '../../components/ui.jsx';
+import { StatusDonut } from '../../components/charts.jsx';
 
 // The dashboard shows the newest 6 entries from the unified saved+applied list.
 const RECENT_LIMIT = 6;
@@ -83,6 +84,13 @@ function DashboardPage({
     'Technical Interview': 0,
     'Final Interview': 0
   };
+
+  // Build the donut data from the real status counts, dropping empty buckets.
+  const statusEntries = Object.entries(statusCounts);
+  const statusTotal = statusEntries.reduce((sum, [, count]) => sum + (count || 0), 0);
+  const donutData = statusEntries
+    .filter(([, count]) => count > 0)
+    .map(([name, value]) => ({ name, value }));
 
   return (
     <section>
@@ -300,17 +308,29 @@ function DashboardPage({
             Application Status
           </h2>
 
-          <div className="grid gap-3">
-            {Object.entries(statusCounts).map(([status, count]) => (
-              <div
-                key={status}
-                className="flex items-center justify-between rounded-2xl bg-slate-50 p-4"
-              >
-                <span className="font-bold text-slate-700">{status}</span>
-                <span className="font-black text-slate-950">{count}</span>
+          {statusTotal > 0 ? (
+            <>
+              {/* Visual breakdown of the real status counts. */}
+              <StatusDonut data={donutData} height={230} />
+
+              {/* Exact numbers kept below the chart so nothing is lost. */}
+              <div className="mt-4 grid gap-2">
+                {statusEntries.map(([status, count]) => (
+                  <div
+                    key={status}
+                    className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-2.5"
+                  >
+                    <span className="text-sm font-bold text-slate-700">{status}</span>
+                    <span className="font-black text-slate-950">{count}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          ) : (
+            <div className="py-8">
+              <EmptyState text="No applications yet — your status breakdown will appear here once you apply." />
+            </div>
+          )}
         </div>
       </div>
     </section>

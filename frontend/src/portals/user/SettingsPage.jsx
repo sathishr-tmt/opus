@@ -10,6 +10,28 @@ import {
 import { apiRequest } from '../../lib/api.js';
 import { PageHeader, FilterInput } from '../../components/ui.jsx';
 
+// Professional on/off switch that actually reflects and persists state.
+function Toggle({ on, onChange, disabled }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      disabled={disabled}
+      onClick={onChange}
+      className={`relative h-6 w-11 shrink-0 rounded-full transition disabled:opacity-50 ${
+        on ? 'bg-violet-600' : 'bg-slate-300'
+      }`}
+    >
+      <span
+        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${
+          on ? 'left-[22px]' : 'left-0.5'
+        }`}
+      />
+    </button>
+  );
+}
+
 function SettingsPage({
   onDashboardChange,
   showToast,
@@ -40,6 +62,7 @@ function SettingsPage({
   });
 
   const [saving, setSaving] = useState(false);
+  const [savingNotification, setSavingNotification] = useState('');
   const [emailLoading, setEmailLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [developmentVerificationUrl, setDevelopmentVerificationUrl] =
@@ -76,6 +99,37 @@ function SettingsPage({
         [name]: value
       }
     }));
+  }
+
+  // Each notification toggle saves immediately (optimistic + revert on error).
+  async function toggleNotification(key) {
+    const nextValue = !settings.notifications?.[key];
+    const nextNotifications = {
+      ...(settings.notifications || {}),
+      [key]: nextValue
+    };
+
+    updateNotification(key, nextValue); // optimistic
+    setSavingNotification(key);
+
+    try {
+      await apiRequest('/api/settings', {
+        method: 'PUT',
+        body: {
+          name: settings.name,
+          phone: settings.phone,
+          location: settings.location,
+          about: settings.about,
+          notifications: nextNotifications
+        }
+      });
+      showToast('Notification preference saved.');
+    } catch (error) {
+      updateNotification(key, !nextValue); // revert
+      showToast(error.message || 'Unable to save preference.');
+    } finally {
+      setSavingNotification('');
+    }
   }
 
   async function saveSettings() {
@@ -248,6 +302,7 @@ function SettingsPage({
 
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-black text-slate-900">Notifications</h2>
+          <p className="mt-1 text-sm text-slate-500">Changes save automatically.</p>
 
           <div className="mt-4 grid gap-3">
             {[
@@ -255,21 +310,18 @@ function SettingsPage({
               ['interviews', 'Interview reminders'],
               ['jobAlerts', 'Job alerts']
             ].map(([key, label]) => (
-              <label
+              <div
                 key={key}
                 className="flex items-center justify-between rounded-2xl bg-slate-50 p-4"
               >
                 <span className="font-bold text-slate-700">{label}</span>
 
-                <input
-                  type="checkbox"
-                  checked={Boolean(settings.notifications?.[key])}
-                  onChange={(event) =>
-                    updateNotification(key, event.target.checked)
-                  }
-                  className="h-5 w-5 accent-violet-600"
+                <Toggle
+                  on={Boolean(settings.notifications?.[key])}
+                  disabled={savingNotification === key}
+                  onChange={() => toggleNotification(key)}
                 />
-              </label>
+              </div>
             ))}
           </div>
         </div>
