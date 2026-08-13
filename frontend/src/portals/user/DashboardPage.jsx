@@ -327,8 +327,11 @@ function DashboardPage({
               </div>
             </>
           ) : (
-            <div className="py-8">
-              <EmptyState text="No applications yet — your status breakdown will appear here once you apply." />
+            <div>
+              <StatusDonut data={[{ name: 'No applications yet', value: 1 }]} height={230} />
+              <p className="mt-2 text-center text-[13px] text-slate-500">
+                Your status breakdown fills in here once you apply to jobs.
+              </p>
             </div>
           )}
         </div>
