@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - feature-branch1
 
 permissions:
   contents: read
@@ -29,17 +30,6 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
       
-      - name: Debug identity
-        run: |
-          gcloud auth list
-          gcloud config list
-
-      - name: Debug identity2
-        run: |
-          gcloud auth print-access-token
-          echo "---"
-          gcloud artifacts repositories describe opus-repo --location=us-south1
-
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
