@@ -1,0 +1,34 @@
+# Copy this file to terraform.tfvars and fill in your values
+# DO NOT commit terraform.tfvars to git (it contains secrets)
+
+gcp_project_id = "project-be80b6ef-7810-4a81-a5b"
+gcp_region     = "us-south1"
+service_name   = "opus"
+
+# Full image URI from your Artifact Registry push
+# Format: GAR_LOCATION-docker.pkg.dev/PROJECT_ID/REPOSITORY/IMAGE_NAME:TAG
+image_uri = "us-south1-docker.pkg.dev/project-be80b6ef-7810-4a81-a5b/opus-repo/opus-app:latest"
+
+# Cloud Run resource sizing
+memory        = "512Mi"
+cpu           = "1"
+min_instances = 0
+max_instances = 10
+port          = 5000
+
+# MongoDB connection string (get from MongoDB Atlas)
+# Example: mongodb+srv://username:password@cluster0.mongodb.net/opus?retryWrites=true&w=majority
+mongodb_uri = "mongodb+srv://user:password@cluster.mongodb.net/opus"
+
+# Generate with: openssl rand -hex 32
+jwt_secret = "your-jwt-secret-here"
+
+# Generate with: openssl rand -hex 32
+approval_token_secret = "your-approval-token-secret-here"
+
+# Frontend URL (optional - if empty, uses Cloud Run URL)
+frontend_url = ""
+
+# SMTP config (optional - leave empty to skip email setup)
+smtp_user = ""
+smtp_pass = ""

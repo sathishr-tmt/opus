@@ -1,0 +1,31 @@
+# Terraform state files (contain sensitive data)
+terraform.tfstate
+terraform.tfstate.*
+*.tfstate
+*.tfstate.*
+
+# Local backend storage
+.terraform/
+.terraform.lock.hcl
+
+# Variable files with secrets (use .example instead)
+terraform.tfvars
+terraform.tfvars.json
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Crash log files
+crash.log
+crash.*.log
+
+# Exclude all .tfvars files except the example
+!terraform.tfvars.example
