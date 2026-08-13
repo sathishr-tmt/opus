@@ -37,7 +37,7 @@ Add these repository secrets:
 ```text
 us-central1-docker.pkg.dev/PROJECT_ID/REPOSITORY/IMAGE_NAME:latest
 ```
-#This line is just for sample
+#This line is just for sample2
 ## Notes
 
 The Docker image build uses the repository root `Dockerfile`, which already builds the frontend and serves it from the Node backend.
