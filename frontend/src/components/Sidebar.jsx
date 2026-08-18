@@ -6,6 +6,7 @@ import { userNavItems, recruiterNavItems, adminNavItems, superAdminNavItems } fr
 
 function Sidebar({ activePage, setActivePage, currentUser, onLogout, badges = {}, open = true }) {
   const role = currentUser?.role || 'user';
+  const isUserPortal = role === 'user';
 
   const navItems =
     role === 'super_admin'
@@ -21,7 +22,7 @@ function Sidebar({ activePage, setActivePage, currentUser, onLogout, badges = {}
     return (
       <button
         onClick={() => setActivePage(id)}
-        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${
+        className={`flex w-full items-center gap-3 px-3 py-2.5 text-left font-semibold transition ${isUserPortal ? 'rounded-[10px] text-[13.5px]' : 'rounded-xl text-sm'} ${
           active
             ? 'bg-violet-50 text-violet-700'
             : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -40,11 +41,11 @@ function Sidebar({ activePage, setActivePage, currentUser, onLogout, badges = {}
 
   return (
     <aside
-      className={`fixed left-0 top-[84px] bottom-0 z-20 overflow-hidden border-r border-slate-200 bg-white transition-all duration-300 ${
-        open ? 'w-60' : 'w-0 border-r-0'
+      className={`fixed bottom-0 left-0 z-20 overflow-hidden border-r border-slate-200 bg-white transition-all duration-300 ${isUserPortal ? 'top-[60px]' : 'top-[84px]'} ${
+        open ? (isUserPortal ? 'w-[238px]' : 'w-60') : 'w-0 border-r-0'
       }`}
     >
-      <nav className="flex h-full w-60 flex-col gap-0.5 overflow-y-auto px-3.5 py-4">
+      <nav className={`flex h-full flex-col gap-0.5 overflow-y-auto ${isUserPortal ? 'w-[238px] px-3 py-3.5' : 'w-60 px-3.5 py-4'}`}>
         {navItems.map((item) => (
           <NavButton key={item.id} {...item} badge={badges[item.id]} />
         ))}

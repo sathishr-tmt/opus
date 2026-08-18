@@ -16,6 +16,7 @@ import { scanFile } from '../virusScan.js';
 import { scoreJob } from '../ats.js';
 import { geminiConfigured } from '../gemini.js';
 import { analyzeResume, rewriteResume } from '../resumeAI.js';
+import { parseResumeLocally } from '../resumeParse.js';
 import { buildResumeDocx } from '../docxBuilder.js';
 import { rewriteDocxPreserveFormat } from '../docxRewrite.js';
 
@@ -147,22 +148,78 @@ export default function registerDocumentRoutes(app) {
     requireAuth,
     requireRole('user'),
     async (req, res) => {
-      try {
-        if (!geminiConfigured()) {
-          return res.status(400).json({ message: 'AI resume analysis is not configured.' });
-        }
-        const docs = await listDocuments(req.user.id, 'resume');
-        const resume = docs[0];
-        if (!resume) {
-          return res.status(400).json({ message: 'Upload a resume first.' });
-        }
-        const filePath = path.join(UPLOAD_DIR, resume.storedName);
-        const fields = await analyzeResume(filePath, resume.mimeType || '');
-        return res.json({ message: 'Resume analyzed.', fields });
-      } catch (error) {
-        console.error('Resume analyze failed:', error);
-        return res.status(500).json({ message: 'Unable to analyze the resume right now.' });
+      const docs = await listDocuments(req.user.id, 'resume');
+      const resume = docs[0];
+
+      if (!resume) {
+        return res.status(400).json({ message: 'Upload a resume first.' });
       }
+
+      const filePath = path.join(UPLOAD_DIR, resume.storedName);
+      const mimeType = resume.mimeType || '';
+
+      let aiFields = null;
+      let aiError = '';
+
+      // Preferred path: Gemini. Any failure here is recoverable — we fall
+      // through to the offline parser rather than returning nothing.
+      if (geminiConfigured()) {
+        try {
+          aiFields = await analyzeResume(filePath, mimeType);
+        } catch (error) {
+          aiError = error.message || 'Gemini call failed.';
+          console.error('Resume analyze (Gemini) failed:', aiError);
+        }
+      } else {
+        aiError = 'GEMINI_API_KEY is not set.';
+      }
+
+      // Offline parser: runs when AI is unavailable, and also alongside it so
+      // any field the AI left blank can still be filled.
+      let localFields = null;
+      try {
+        localFields = await parseResumeLocally(filePath, mimeType);
+      } catch (error) {
+        console.error('Resume analyze (local) failed:', error.message);
+      }
+
+      if (!aiFields && (!localFields || localFields._empty)) {
+        return res.status(422).json({
+          message:
+            'Could not read any text from this resume. If it is a scanned image, ' +
+            'upload a text-based PDF or DOCX instead.',
+          detail: aiError || undefined
+        });
+      }
+
+      // Merge: AI wins where it produced a value, local fills the gaps.
+      const pick = (key) => {
+        const fromAi = aiFields ? aiFields[key] : null;
+        if (Array.isArray(fromAi) ? fromAi.length : fromAi) return fromAi;
+        return localFields ? localFields[key] : null;
+      };
+
+      const fields = {
+        professionalTitle: pick('professionalTitle') || '',
+        experienceYears: Number(pick('experienceYears')) || 0,
+        skills: pick('skills') || [],
+        professionalSummary: pick('professionalSummary') || '',
+        location: pick('location') || '',
+        phone: pick('phone') || ''
+      };
+
+      const source = aiFields ? 'ai' : 'local';
+
+      return res.json({
+        message:
+          source === 'ai'
+            ? 'Resume analyzed.'
+            : 'Resume read offline — review the details before saving.',
+        source,
+        fields,
+        // Surfaced so a misconfigured key is visible instead of silent.
+        detail: source === 'local' && aiError ? aiError : undefined
+      });
     }
   );
 

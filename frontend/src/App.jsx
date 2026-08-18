@@ -472,8 +472,10 @@ function App() {
     );
   }
 
+  const isUserPortal = currentUser.role === 'user';
+
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className={`opus-app min-h-screen bg-slate-50 ${isUserPortal ? 'user-portal' : 'staff-portal'}`}>
       <TopBar
         showToast={showToast}
         gmailStatus={gmailStatus}
@@ -493,8 +495,8 @@ function App() {
         open={sidebarOpen}
       />
 
-      <main className={`min-h-screen pt-[84px] transition-all duration-300 ${sidebarOpen ? 'ml-60' : 'ml-0'}`}>
-        <div className="px-7 py-6">
+      <main className={`min-h-screen transition-all duration-300 ${isUserPortal ? 'pt-[60px]' : 'pt-[84px]'} ${sidebarOpen ? (isUserPortal ? 'ml-0 md:ml-[238px]' : 'ml-60') : 'ml-0'}`}>
+        <div className={`${isUserPortal ? 'opus-page' : ''} px-7 py-6`}>
           {activePage === 'help' && (
             <HelpSupportPage currentUser={currentUser} />
           )}

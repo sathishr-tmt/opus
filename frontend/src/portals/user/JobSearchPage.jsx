@@ -7,7 +7,6 @@ import {
   Bookmark,
   Building2,
   CheckCircle2,
-  Database,
   ExternalLink,
   RefreshCw,
   Search,
@@ -339,7 +338,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
           <button
             onClick={() => searchJobs({ refresh: true })}
             disabled={loading}
-            className="flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex items-center gap-2 rounded-[10px] border border-slate-200 bg-white px-3.5 py-2.5 text-[13px] font-bold text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <RefreshCw size={17} className={loading ? 'animate-spin' : ''} />
             {loading ? 'Refreshing...' : 'Refresh Results'}
@@ -347,19 +346,19 @@ function JobSearchPage({ onDashboardChange, showToast }) {
         }
       />
 
-      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="rounded-xl border border-slate-200 bg-white p-[18px] shadow-sm">
         <div className="mb-5">
-          <h2 className="text-lg font-black text-slate-900">
+          <h2 className="text-[15px] font-extrabold text-slate-900">
             Search Preferences
           </h2>
-          <p className="mt-1 text-sm leading-6 text-slate-500">
+          <p className="mt-1 max-w-4xl text-[13px] leading-5 text-slate-500">
             OPUS keeps the job title as the primary requirement. When exact
             results are limited, it relaxes optional filters in stages and
             shows the change on each result.
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3.5 md:grid-cols-2 xl:grid-cols-4">
           {/* Job Title: a combo box — type any title, or pick from the list. */}
           <label className="block">
             <span className="mb-1.5 block text-[13px] font-bold text-slate-600">
@@ -458,11 +457,11 @@ function JobSearchPage({ onDashboardChange, showToast }) {
           </label>
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-3">
+        <div className="mt-5 flex flex-wrap gap-2.5">
           <button
             onClick={() => searchJobs()}
             disabled={loading}
-            className="rounded-xl bg-violet-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-violet-100 hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-[10px] bg-violet-600 px-4 py-2.5 text-[13px] font-bold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loading ? 'Searching...' : 'Search Opportunities'}
           </button>
@@ -470,7 +469,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
           <button
             onClick={clearFilters}
             disabled={loading}
-            className="rounded-xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-200 disabled:opacity-60"
+            className="rounded-[10px] border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
           >
             Clear Filters
           </button>
@@ -478,7 +477,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
       </div>
 
       {sources.length > 0 && (
-        <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-[18px] shadow-sm">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h2 className="font-black text-slate-900">Connected Job Sources</h2>
@@ -507,7 +506,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
       )}
 
       {warnings.length > 0 && (
-        <div className="mt-6 rounded-3xl border border-amber-200 bg-amber-50 p-5">
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
           <div className="flex items-start gap-3">
             <AlertTriangle className="mt-0.5 shrink-0 text-amber-600" size={20} />
             <div>
@@ -528,7 +527,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
       )}
 
       {hasSearched && (
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             title="Exact Matches"
             value={matchSummary.exact || 0}
@@ -556,13 +555,13 @@ function JobSearchPage({ onDashboardChange, showToast }) {
         </div>
       )}
 
-      <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-[18px] shadow-sm">
         <div className="mb-5 flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
           <div>
-            <h2 className="text-lg font-black text-slate-900">
+            <h2 className="text-[15px] font-extrabold text-slate-900">
               Search Results ({jobs.length})
             </h2>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-xs text-slate-500">
               Showing {visibleJobs.length} of {jobs.length}. Results are ranked
               by title, location, work mode, experience, salary, authorization,
               and freshness.
@@ -572,7 +571,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
           {jobs.length > 10 && (
             <button
               onClick={() => setShowAllResults((previous) => !previous)}
-              className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-200"
+              className="rounded-[10px] border border-slate-200 bg-white px-3.5 py-2 text-[13px] font-bold text-slate-700 hover:bg-slate-50"
             >
               {showAllResults ? 'Show Top 10' : 'View All Results'}
             </button>
@@ -581,7 +580,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
 
         {visibleJobs.length ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1250px] border-separate border-spacing-y-3 text-left">
+            <table className="opus-data-table w-full min-w-[1250px] border-collapse text-left">
               <thead>
                 <tr className="text-xs uppercase tracking-wide text-slate-400">
                   <th className="px-4 py-2">Match</th>
@@ -601,8 +600,8 @@ function JobSearchPage({ onDashboardChange, showToast }) {
                   const isSaved = savedJobIds.includes(String(job.id));
 
                   return (
-                    <tr key={job.id} className="bg-slate-50 align-top">
-                      <td className="rounded-l-2xl px-4 py-4">
+                    <tr key={job.id} className="align-top transition hover:bg-slate-50">
+                      <td className="px-4 py-4">
                         {/* ATS score: how well the user's profile matches this posting. */}
                         {job.atsScore != null ? (
                           <span
@@ -682,18 +681,18 @@ function JobSearchPage({ onDashboardChange, showToast }) {
                         </span>
                       </td>
 
-                      <td className="rounded-r-2xl px-4 py-4">
+                      <td className="px-4 py-4">
                         <div className="flex min-w-[220px] flex-wrap gap-2">
                           <button
                             onClick={() => setSelectedJob(job)}
-                            className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white"
+                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
                           >
                             View JD
                           </button>
 
                           <button
                             onClick={() => toggleSaved(job)}
-                            className={`flex items-center gap-1 rounded-xl px-3 py-2 text-xs font-black ${
+                            className={`flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-bold ${
                               isSaved
                                 ? 'bg-violet-100 text-violet-700'
                                 : 'bg-white text-slate-600'
@@ -708,7 +707,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
 
                           <button
                             onClick={() => beginApplication(job)}
-                            className="flex items-center gap-1 rounded-xl bg-violet-600 px-3 py-2 text-xs font-black text-white hover:bg-violet-700"
+                            className="flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-2 text-xs font-bold text-white hover:bg-violet-700"
                           >
                             Apply
                             <ExternalLink size={14} />
@@ -734,7 +733,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
 
       {selectedJob && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/60 p-6 backdrop-blur-sm">
-          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
+          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-xl border border-slate-200 bg-white p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -782,7 +781,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
                 ['Salary', formatSalary(selectedJob)],
                 ['Source', selectedJob.source || 'Public Job Feed']
               ].map(([label, value]) => (
-                <div key={label} className="rounded-2xl bg-slate-50 p-4">
+                <div key={label} className="rounded-xl border border-slate-100 bg-slate-50 p-3.5">
                   <p className="text-xs font-black uppercase text-slate-400">
                     {label}
                   </p>
@@ -792,7 +791,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
             </div>
 
             {selectedJob.relaxedFilters?.length > 0 && (
-              <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800">
+              <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800">
                 OPUS relaxed these filters to include this opportunity:{' '}
                 {selectedJob.relaxedFilters.join(', ')}.
               </div>
@@ -800,7 +799,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
 
             {/* Why this job scored what it scored. */}
             {selectedJob.atsScore != null && (
-              <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-5">
+              <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
                 <h3 className="font-black text-slate-900">
                   ATS match: {selectedJob.atsScore}%
                 </h3>
@@ -839,7 +838,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
               </div>
             )}
 
-            <div className="mt-5 rounded-2xl bg-slate-50 p-5">
+            <div className="mt-5 rounded-xl bg-slate-50 p-4">
               <h3 className="font-black text-slate-900">Job Description</h3>
 
               <p className="mt-3 whitespace-pre-line text-sm leading-7 text-slate-600">
@@ -873,8 +872,8 @@ function JobSearchPage({ onDashboardChange, showToast }) {
 
       {pendingApplyJob && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-6 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-7 shadow-2xl">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-50 text-violet-600">
+          <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
               <CheckCircle2 size={27} />
             </div>
 

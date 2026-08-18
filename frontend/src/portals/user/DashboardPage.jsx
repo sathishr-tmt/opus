@@ -6,11 +6,11 @@ import {
   Bookmark,
   Briefcase,
   CalendarDays,
-  Search
+  UserRound
 } from 'lucide-react';
 import { apiRequest } from '../../lib/api.js';
 import { PageHeader, StatCard, Badge, EmptyState, Pill, btnPrimaryClass } from '../../components/ui.jsx';
-import { StatusDonut } from '../../components/charts.jsx';
+import { StatusDonut, TrendChart } from '../../components/charts.jsx';
 
 // The dashboard shows the newest 6 entries from the unified saved+applied list.
 const RECENT_LIMIT = 6;
@@ -92,6 +92,29 @@ function DashboardPage({
     .filter(([, count]) => count > 0)
     .map(([name, value]) => ({ name, value }));
 
+  const profileFields = ['name', 'email', 'phone', 'location', 'about'];
+  const completedProfileFields = profileFields.filter((field) => {
+    const value = dashboard?.settings?.[field];
+    return Array.isArray(value) ? value.length > 0 : Boolean(String(value || '').trim());
+  }).length;
+  const profileCompletion = Math.round((completedProfileFields / profileFields.length) * 100);
+
+  const activityWeeks = Array.from({ length: 8 }, (_, index) => {
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    end.setDate(end.getDate() - (7 - index) * 7);
+    const start = new Date(end);
+    start.setDate(start.getDate() - 6);
+    start.setHours(0, 0, 0, 0);
+    return { start, end, label: start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) };
+  });
+  const activityCounts = activityWeeks.map(({ start, end }) =>
+    (dashboard?.recentApplications || []).filter((application) => {
+      const date = new Date(application.updatedAt || application.appliedAt || 0);
+      return !Number.isNaN(date.getTime()) && date >= start && date <= end;
+    }).length
+  );
+
   return (
     <section>
       <PageHeader
@@ -101,7 +124,7 @@ function DashboardPage({
 
       {/* Applied and Saved are deliberately separate: the Applied number only
           moves when the user confirms they actually applied. */}
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-3.5 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           title="Applied"
           value={counts.appliedCount}
@@ -110,21 +133,53 @@ function DashboardPage({
         />
 
         <StatCard
-          title="Interviews"
+          title="Interviews Scheduled"
           value={dashboard?.interviews ?? dashboard?.upcomingInterviews ?? 0}
           icon={CalendarDays}
           tone="yellow"
         />
 
         <StatCard
-          title="Saved Jobs"
+          title="Saved / Recommended"
           value={counts.savedCount}
           icon={Bookmark}
           tone="violet"
         />
+
+        <StatCard
+          title="Profile Completion"
+          value={`${profileCompletion}%`}
+          icon={UserRound}
+          tone="green"
+        />
       </div>
 
-      <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mt-4 grid gap-4 xl:grid-cols-[2fr_1fr]">
+        <section className="rounded-xl border border-slate-200 bg-white p-[18px] shadow-sm">
+          <h2 className="text-[15px] font-extrabold text-slate-900">Application activity</h2>
+          <p className="mt-1 text-xs text-slate-400">Applications updated over the last eight weeks</p>
+          <TrendChart
+            categories={activityWeeks.map((week) => week.label)}
+            series={[{ name: 'Applications', data: activityCounts }]}
+            height={235}
+          />
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-[18px] shadow-sm">
+          <h2 className="text-[15px] font-extrabold text-slate-900">Application status</h2>
+          <p className="mt-1 text-xs text-slate-400">Where your active applications stand</p>
+          {statusTotal > 0 ? (
+            <StatusDonut data={donutData} height={235} />
+          ) : (
+            <div>
+              <StatusDonut data={[{ name: 'No applications yet', value: 1 }]} height={210} />
+              <p className="text-center text-xs text-slate-500">Your breakdown appears after you apply.</p>
+            </div>
+          )}
+        </section>
+      </div>
+
+      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-[18px] shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-lg font-black text-slate-900">
@@ -212,15 +267,15 @@ function DashboardPage({
         )}
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mt-4 grid gap-4 xl:grid-cols-2">
+        <div className="rounded-xl border border-slate-200 bg-white p-[18px] shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-black text-slate-900">
+              <h2 className="text-[15px] font-extrabold text-slate-900">
                 Recent Applications
               </h2>
 
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-xs text-slate-400">
                 Your {RECENT_LIMIT} newest saved and applied jobs.
               </p>
             </div>
@@ -243,7 +298,7 @@ function DashboardPage({
                 const isSaved = entry.kind === 'saved';
 
                 return (
-                  <div key={entry.entryId} className="rounded-2xl bg-slate-50 p-4">
+                  <div key={entry.entryId} className="rounded-xl border border-slate-100 bg-slate-50 p-3.5">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
@@ -303,37 +358,29 @@ function DashboardPage({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-4 text-lg font-black text-slate-900">
-            Application Status
-          </h2>
+        <div className="rounded-xl border border-slate-200 bg-white p-[18px] shadow-sm">
+          <h2 className="text-[15px] font-extrabold text-slate-900">Application status history</h2>
+          <p className="mt-1 text-xs text-slate-400">Latest changes to your active applications</p>
 
-          {statusTotal > 0 ? (
-            <>
-              {/* Visual breakdown of the real status counts. */}
-              <StatusDonut data={donutData} height={230} />
-
-              {/* Exact numbers kept below the chart so nothing is lost. */}
-              <div className="mt-4 grid gap-2">
-                {statusEntries.map(([status, count]) => (
-                  <div
-                    key={status}
-                    className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-2.5"
-                  >
-                    <span className="text-sm font-bold text-slate-700">{status}</span>
-                    <span className="font-black text-slate-950">{count}</span>
-                  </div>
-                ))}
+          <div className="relative mt-5 space-y-5 border-l-2 border-slate-100 pl-5">
+            {(dashboard?.recentApplications || []).slice(0, 6).map((application) => (
+              <div key={application.id} className="relative">
+                <span className="absolute -left-[27px] top-1 h-3 w-3 rounded-full border-2 border-white bg-violet-600" />
+                <p className="text-[13px] font-bold text-slate-800">
+                  {application.status || 'Applied'} — {application.company || application.title || 'Application'}
+                </p>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  {application.updatedAt || application.appliedAt
+                    ? new Date(application.updatedAt || application.appliedAt).toLocaleString()
+                    : 'Recently updated'}
+                </p>
               </div>
-            </>
-          ) : (
-            <div>
-              <StatusDonut data={[{ name: 'No applications yet', value: 1 }]} height={230} />
-              <p className="mt-2 text-center text-[13px] text-slate-500">
-                Your status breakdown fills in here once you apply to jobs.
-              </p>
-            </div>
-          )}
+            ))}
+
+            {!dashboard?.recentApplications?.length && (
+              <EmptyState text="Application updates will appear here." />
+            )}
+          </div>
         </div>
       </div>
     </section>

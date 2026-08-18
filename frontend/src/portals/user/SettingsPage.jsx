@@ -4,8 +4,7 @@
 import { useState, useEffect } from 'react';
 import {
   KeyRound,
-  MailCheck,
-  Settings
+  MailCheck
 } from 'lucide-react';
 import { apiRequest } from '../../lib/api.js';
 import { PageHeader, FilterInput } from '../../components/ui.jsx';
@@ -244,13 +243,13 @@ function SettingsPage({
         subtitle="Manage your profile, notifications, email address, and password."
       />
 
-      <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-black text-slate-900">
+      <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
+        <div className="rounded-xl border border-slate-200 bg-white p-[18px] shadow-sm">
+          <h2 className="text-[15px] font-extrabold text-slate-900">
             Profile Preferences
           </h2>
 
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <div className="mt-4 grid gap-3.5 md:grid-cols-2">
             <FilterInput
               label="Name"
               value={settings.name || ''}
@@ -287,21 +286,21 @@ function SettingsPage({
               value={settings.about || ''}
               onChange={(event) => updateSetting('about', event.target.value)}
               rows="5"
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px] outline-none transition focus:border-violet-500"
             />
           </label>
 
           <button
             onClick={saveSettings}
             disabled={saving}
-            className="mt-5 rounded-xl bg-violet-600 px-5 py-3 text-sm font-black text-white disabled:opacity-60"
+            className="mt-5 rounded-[10px] bg-violet-600 px-4 py-2.5 text-[13px] font-bold text-white hover:bg-violet-700 disabled:opacity-60"
           >
             {saving ? 'Saving...' : 'Save Profile Preferences'}
           </button>
         </div>
 
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-black text-slate-900">Notifications</h2>
+        <div className="rounded-xl border border-slate-200 bg-white p-[18px] shadow-sm">
+          <h2 className="text-[15px] font-extrabold text-slate-900">Notifications</h2>
           <p className="mt-1 text-sm text-slate-500">Changes save automatically.</p>
 
           <div className="mt-4 grid gap-3">
@@ -312,7 +311,7 @@ function SettingsPage({
             ].map(([key, label]) => (
               <div
                 key={key}
-                className="flex items-center justify-between rounded-2xl bg-slate-50 p-4"
+                className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3.5"
               >
                 <span className="font-bold text-slate-700">{label}</span>
 
@@ -327,23 +326,23 @@ function SettingsPage({
         </div>
       </div>
 
-      <div className="mt-6">
+      <div className="mt-5">
         <PageHeader
           title="Account & Security"
           subtitle="Sensitive account changes require your current password."
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-2">
         <form
           onSubmit={requestEmailChange}
-          className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+          className="rounded-xl border border-slate-200 bg-white p-[18px] shadow-sm"
         >
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-50 text-violet-600">
-            <MailCheck size={23} />
+          <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-violet-50 text-violet-600">
+            <MailCheck size={20} />
           </div>
 
-          <h2 className="mt-4 text-lg font-black text-slate-900">
+          <h2 className="mt-4 text-[15px] font-extrabold text-slate-900">
             Change Email
           </h2>
 
@@ -382,7 +381,7 @@ function SettingsPage({
           </div>
 
           {developmentVerificationUrl && (
-            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
               SMTP is not configured. For local development, open this
               verification link:
               <a
@@ -399,7 +398,7 @@ function SettingsPage({
           <button
             type="submit"
             disabled={emailLoading}
-            className="mt-5 rounded-xl bg-violet-600 px-5 py-3 text-sm font-black text-white disabled:opacity-60"
+            className="mt-5 rounded-[10px] bg-violet-600 px-4 py-2.5 text-[13px] font-bold text-white hover:bg-violet-700 disabled:opacity-60"
           >
             {emailLoading ? 'Sending Verification...' : 'Verify New Email'}
           </button>
@@ -407,13 +406,13 @@ function SettingsPage({
 
         <form
           onSubmit={changePassword}
-          className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+          className="rounded-xl border border-slate-200 bg-white p-[18px] shadow-sm"
         >
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-50 text-violet-600">
-            <KeyRound size={23} />
+          <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-violet-50 text-violet-600">
+            <KeyRound size={20} />
           </div>
 
-          <h2 className="mt-4 text-lg font-black text-slate-900">
+          <h2 className="mt-4 text-[15px] font-extrabold text-slate-900">
             Change Password
           </h2>
 
@@ -467,7 +466,7 @@ function SettingsPage({
           <button
             type="submit"
             disabled={passwordLoading}
-            className="mt-5 rounded-xl bg-slate-900 px-5 py-3 text-sm font-black text-white disabled:opacity-60"
+            className="mt-5 rounded-[10px] bg-slate-900 px-4 py-2.5 text-[13px] font-bold text-white hover:bg-slate-800 disabled:opacity-60"
           >
             {passwordLoading ? 'Changing Password...' : 'Change Password'}
           </button>

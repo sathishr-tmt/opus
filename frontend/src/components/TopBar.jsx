@@ -1,6 +1,6 @@
 // TopBar — full-width header: OPUS logo with a three-line (hamburger) button
 // directly under it, plus theme toggle, notifications (users), and profile menu.
-import { Bell, Sun, Moon, Menu } from 'lucide-react';
+import { Bell, Sun, Moon, Menu, Search } from 'lucide-react';
 import { OpusMark } from './Logo.jsx';
 import { ProfileMenu } from './ProfileMenu.jsx';
 
@@ -31,30 +31,69 @@ function TopBar({ showToast, gmailStatus, currentUser, setActivePage, onLogout, 
     );
   }
 
-  return (
-    <header className="fixed inset-x-0 top-0 z-30 flex h-[84px] items-center gap-3 border-b border-slate-200 bg-white/90 px-6 backdrop-blur">
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center gap-2">
-          <OpusMark size={30} />
-          <span className="text-lg font-extrabold text-slate-900">OPUS</span>
-          {roleTag && (
+  if (role !== 'user') {
+    return (
+      <header className="fixed inset-x-0 top-0 z-30 flex h-[84px] items-center gap-3 border-b border-slate-200 bg-white/90 px-6 backdrop-blur">
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <OpusMark size={30} />
+            <span className="text-lg font-extrabold text-slate-900">OPUS</span>
             <span className="rounded-md bg-violet-50 px-1.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-violet-700">
               {roleTag}
             </span>
-          )}
+          </div>
+
+          <button
+            onClick={onToggleSidebar}
+            aria-label="Toggle menu"
+            title="Toggle menu"
+            className="flex h-8 w-10 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100"
+          >
+            <Menu size={20} />
+          </button>
         </div>
 
+        <div className="ml-auto flex items-center gap-3">
+          <button
+            onClick={onToggleTheme}
+            className="rounded-xl bg-slate-100 p-2.5 text-slate-600 hover:bg-slate-200"
+            title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {isDark ? <Sun size={17} /> : <Moon size={17} />}
+          </button>
+          <ProfileMenu currentUser={currentUser} setActivePage={setActivePage} onLogout={onLogout} />
+        </div>
+      </header>
+    );
+  }
+
+  return (
+    <header className="fixed inset-x-0 top-0 z-30 flex h-[60px] items-center gap-3 border-b border-slate-200 bg-white/90 px-[22px] backdrop-blur">
+      <div className="flex items-center gap-2.5">
         <button
           onClick={onToggleSidebar}
           aria-label="Toggle menu"
           title="Toggle menu"
-          className="flex h-8 w-10 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100"
+          className="flex h-9 w-9 items-center justify-center rounded-[10px] text-slate-600 transition hover:bg-slate-100"
         >
-          <Menu size={20} />
+          <Menu size={19} />
         </button>
+        <div className="flex items-center gap-2">
+          <OpusMark size={27} />
+          <span className="text-lg font-extrabold tracking-wide text-slate-900">OPUS</span>
+        </div>
       </div>
 
       <div className="ml-auto flex items-center gap-3">
+        <button
+          onClick={() => setActivePage('jobs')}
+          className="hidden w-[280px] items-center gap-2 rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-2 text-left text-[13px] text-slate-400 lg:flex"
+          title="Search"
+        >
+          <Search size={16} />
+          <span>Search OPUS…</span>
+        </button>
         <button
           onClick={onToggleTheme}
           className="rounded-xl bg-slate-100 p-2.5 text-slate-600 hover:bg-slate-200"

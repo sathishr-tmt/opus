@@ -1,7 +1,59 @@
 @import "tailwindcss";
 
 body {
+  margin: 0;
   background: #f8fafc;
+  color: #171923;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+:root {
+  --opus-primary: #6d28d9;
+  --opus-primary-2: #8b5cf6;
+  --opus-primary-soft: #f2edff;
+  --opus-bg: #f6f7fb;
+  --opus-surface: #ffffff;
+  --opus-text: #171923;
+  --opus-muted: #6b7280;
+  --opus-border: #e8eaf0;
+  --opus-radius: 12px;
+  --opus-shadow: 0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.04);
+}
+
+.user-portal { background: var(--opus-bg); }
+.user-portal .opus-page { max-width: 1680px; margin: 0 auto; }
+.user-portal .rounded-2xl { border-radius: var(--opus-radius); }
+.user-portal .shadow-sm { box-shadow: var(--opus-shadow); }
+.user-portal .rounded-2xl.border.bg-white { box-shadow: var(--opus-shadow); }
+.user-portal h1.text-xl { font-size: 22px; letter-spacing: -.2px; }
+.user-portal .border-slate-200 { border-color: var(--opus-border); }
+.user-portal table tbody tr { transition: background-color .15s ease; }
+.user-portal table tbody tr:hover { background: #fafafe; }
+.user-portal .opus-data-table thead th {
+  border-bottom: 1px solid var(--opus-border);
+  padding-top: 10px;
+  padding-bottom: 10px;
+  color: var(--opus-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+.user-portal .opus-data-table tbody td { border-bottom: 1px solid var(--opus-border); }
+.user-portal .opus-data-table tbody tr:last-child td { border-bottom: 0; }
+.user-portal button:focus-visible,
+.user-portal a:focus-visible,
+.user-portal input:focus-visible,
+.user-portal select:focus-visible,
+.user-portal textarea:focus-visible {
+  outline: 3px solid rgba(139, 92, 246, .25);
+  outline-offset: 2px;
+}
+
+@media (max-width: 767px) {
+  .user-portal .opus-page { padding-left: 16px; padding-right: 16px; }
 }
 
 * {
