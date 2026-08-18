@@ -4,12 +4,13 @@ import { useState, useEffect } from 'react';
 import { RefreshCw, Download } from 'lucide-react';
 import {
   PageHeader, Card, StatTile, Pill, ListItem, MonthCalendar, Field,
-  inputClass, btnClass, btnSmClass, btnPrimaryClass, EmptyState
+  inputClass, btnClass, btnSmClass, btnPrimaryClass, EmptyState, ExportMenu
 } from '../../components/ui.jsx';
 import { StatusDonut, BarComparison, HealthGauge } from '../../components/charts.jsx';
 import { apiRequest, API_BASE } from '../../lib/api.js';
 import { AdminDashboardPage, AdminRecruiterApprovalsPage, AdminUsersPage } from './AdminPage.jsx';
 import { AdminInternalApplicationsPage } from './AdminInternalApplicationsPage.jsx';
+import { AccountPanel } from '../../components/AccountPanel.jsx';
 
 function downloadUrl(path) {
   window.open(`${API_BASE}${path}`, '_blank');
@@ -345,20 +346,25 @@ function AdminReportsPage({ showToast }) {
         </div>
       )}
 
-      <Card title="Reports & exports">
-        <p className="mb-3.5 text-[13px] text-slate-500">
-          Download platform data for offline review and sharing.
-        </p>
+      <Card
+        title="Reports & exports"
+        hint="Pick a date range once, then choose a format. Leave the range blank for all time."
+        action={
+          <ExportMenu
+            label="Export"
+            options={exports.map((item) => ({
+              label: `${item.title} (${item.label})`,
+              path: item.path
+            }))}
+          />
+        }
+      >
         {exports.map((item) => (
           <ListItem
             key={item.title}
             title={item.title}
             meta={item.meta}
-            right={
-              <button className={btnSmClass} onClick={() => downloadUrl(item.path)}>
-                <Download size={12} className="mr-1 inline" /> {item.label}
-              </button>
-            }
+            right={<Pill tone="slate">{item.label}</Pill>}
           />
         ))}
       </Card>
@@ -374,7 +380,7 @@ function AdminReportsPage({ showToast }) {
   );
 }
 
-function AdminSettingsPage({ showToast }) {
+function AdminSettingsPage({ showToast, currentUser, onLogout }) {
   const [settings, setSettings] = useState(null);
   const [saving, setSaving] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '' });
@@ -463,11 +469,17 @@ function AdminSettingsPage({ showToast }) {
           {changingPassword ? 'Changing...' : 'Change password'}
         </button>
       </Card>
+      <AccountPanel
+        currentUser={currentUser}
+        showToast={showToast}
+        onLogout={onLogout}
+        roleLabel="Admin"
+      />
     </section>
   );
 }
 
-function AdminPortalSection({ activePage, showToast, setActivePage = () => {} }) {
+function AdminPortalSection({ activePage, showToast, setActivePage = () => {}, currentUser, onLogout }) {
   if (activePage === 'admin-dashboard') {
     return <AdminDashboardPage showToast={showToast} setActivePage={setActivePage} />;
   }
@@ -478,7 +490,14 @@ function AdminPortalSection({ activePage, showToast, setActivePage = () => {} })
   if (activePage === 'admin-sources') return <AdminJobSourcesPage showToast={showToast} />;
   if (activePage === 'admin-calendar') return <AdminInterviewsPage showToast={showToast} />;
   if (activePage === 'admin-reports') return <AdminReportsPage showToast={showToast} />;
-  if (activePage === 'admin-settings') return <AdminSettingsPage showToast={showToast} />;
+  if (activePage === 'admin-settings')
+    return (
+      <AdminSettingsPage
+        showToast={showToast}
+        currentUser={currentUser}
+        onLogout={onLogout}
+      />
+    );
 
   return (
     <section>
@@ -489,5 +508,7 @@ function AdminPortalSection({ activePage, showToast, setActivePage = () => {} })
 }
 
 export {
-  AdminPortalSection
+  AdminPortalSection,
+  // Reused by the Super Admin portal, which now has its own Job Sources item.
+  AdminJobSourcesPage
 };

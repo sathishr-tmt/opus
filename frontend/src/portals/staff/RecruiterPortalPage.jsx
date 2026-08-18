@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react';
 import { apiRequest, API_BASE } from '../../lib/api.js';
 import {
   PageHeader, Card, StatTile, Pill, ListItem, Field, MonthCalendar,
-  inputClass, btnClass, btnPrimaryClass, btnSmClass, EmptyState
+  inputClass, btnClass, btnPrimaryClass, btnSmClass, EmptyState, ExportMenu, KpiCard
 } from '../../components/ui.jsx';
 import { StatusDonut, RecruitmentFunnel } from '../../components/charts.jsx';
+import { AccountPanel } from '../../components/AccountPanel.jsx';
 
 const CANDIDATE_STATUSES = [
   'Applied', 'Under Review', 'Online Assessment', 'Technical Interview',
@@ -127,7 +128,7 @@ function CandidateCard({ application, onStatus, onNotes, onSchedule }) {
   );
 }
 
-function RecruiterPortalPage({ activePage, currentUser, showToast }) {
+function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage, onLogout }) {
   const [overview, setOverview] = useState(null);
   const [jobs, setJobs] = useState([]);
   const [applications, setApplications] = useState([]);
@@ -143,6 +144,7 @@ function RecruiterPortalPage({ activePage, currentUser, showToast }) {
     minSalary: '', maxSalary: '', description: ''
   });
   const [savingJob, setSavingJob] = useState(false);
+  const [creatingPosting, setCreatingPosting] = useState(false);
 
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '' });
   const [changingPassword, setChangingPassword] = useState(false);
@@ -301,10 +303,35 @@ function RecruiterPortalPage({ activePage, currentUser, showToast }) {
       <section>
         <PageHeader title="Dashboard" subtitle="Your postings and assigned candidates." />
         <div className="mb-4 grid gap-3.5 md:grid-cols-4">
-          <StatTile label="My postings" value={overview?.counts?.postings ?? 0} />
-          <StatTile label="Active postings" value={overview?.counts?.activePostings ?? 0} />
-          <StatTile label="Assigned candidates" value={overview?.counts?.assignedApplications ?? applications.length} />
-          <StatTile label="Interviews" value={overview?.counts?.upcomingInterviews ?? interviews.length} />
+          {/* Each card opens the page it summarises. */}
+          <KpiCard
+            label="My postings"
+            value={overview?.counts?.postings ?? 0}
+            icon={BriefcaseBusiness}
+            tone="blue"
+            onClick={() => setActivePage && setActivePage('recruiter-jobs')}
+          />
+          <KpiCard
+            label="Active postings"
+            value={overview?.counts?.activePostings ?? 0}
+            icon={CheckCircle2}
+            tone="green"
+            onClick={() => setActivePage && setActivePage('recruiter-jobs')}
+          />
+          <KpiCard
+            label="Assigned candidates"
+            value={overview?.counts?.assignedApplications ?? applications.length}
+            icon={Users}
+            tone="violet"
+            onClick={() => setActivePage && setActivePage('recruiter-applications')}
+          />
+          <KpiCard
+            label="Interviews"
+            value={overview?.counts?.upcomingInterviews ?? interviews.length}
+            icon={CalendarCheck}
+            tone="amber"
+            onClick={() => setActivePage && setActivePage('recruiter-calendar')}
+          />
         </div>
 
         {total > 0 && (
@@ -338,42 +365,27 @@ function RecruiterPortalPage({ activePage, currentUser, showToast }) {
     );
   }
 
-  if (activePage === 'recruiter-jobs') {
+  if (activePage === 'recruiter-jobs' || activePage === 'recruiter-create-job') {
     return (
       <section>
-        <PageHeader title="My Job Postings" subtitle="Create, edit, and close your postings." />
-        <Card title="My job postings">
-          {loading ? (
-            <EmptyState text="Loading postings..." />
-          ) : jobs.length ? (
-            jobs.map((job) => (
-              <ListItem
-                key={job.id}
-                title={job.title}
-                meta={`${job.location} · ${job.workMode} · ${job.jobType}`}
-                right={
-                  <>
-                    <Pill>{job.status}</Pill>
-                    <button className={btnSmClass} onClick={() => togglePosting(job)}>
-                      {job.status === 'open' ? 'Close' : 'Reopen'}
-                    </button>
-                  </>
-                }
-              />
-            ))
-          ) : (
-            <EmptyState text="You have no postings yet." />
-          )}
-        </Card>
-      </section>
-    );
-  }
+        <PageHeader
+          title="My Job Postings"
+          subtitle="Create, edit, and close your postings."
+          action={
+            <button
+              className={creatingPosting ? btnClass : btnPrimaryClass}
+              onClick={() => setCreatingPosting((value) => !value)}
+            >
+              {creatingPosting ? 'Cancel' : '+ New posting'}
+            </button>
+          }
+        />
 
-  if (activePage === 'recruiter-create-job') {
-    return (
-      <section>
-        <PageHeader title="Create Job Posting" subtitle="Publish a new role for your company." />
-        <Card title="Create job posting" className="max-w-2xl">
+        {/* Creating a posting happens here rather than on a separate page —
+            it is an action on this list, not a destination of its own. */}
+        {creatingPosting && (
+          <div className="mb-3.5">
+            <Card title="Create job posting" className="max-w-2xl">
           <Field label="Job title">
             <input className={inputClass} value={jobForm.title} placeholder="Java Developer"
               onChange={(e) => updateJobForm('title', e.target.value)} />
@@ -418,18 +430,70 @@ function RecruiterPortalPage({ activePage, currentUser, showToast }) {
               placeholder="Role responsibilities and requirements..."
               onChange={(e) => updateJobForm('description', e.target.value)} />
           </Field>
-          <button className={btnPrimaryClass} disabled={savingJob} onClick={() => saveJobPosting()}>
+          <button
+            className={btnPrimaryClass}
+            disabled={savingJob}
+            onClick={async () => {
+              await saveJobPosting();
+              setCreatingPosting(false);
+              await loadJobs();
+            }}
+          >
             {savingJob ? 'Publishing...' : 'Publish posting'}
           </button>
+        </Card>
+          </div>
+        )}
+
+        <Card title="My job postings">
+          {loading ? (
+            <EmptyState text="Loading postings..." />
+          ) : jobs.length ? (
+            jobs.map((job) => (
+              <ListItem
+                key={job.id}
+                title={job.title}
+                meta={`${job.location} · ${job.workMode} · ${job.jobType}`}
+                right={
+                  <>
+                    <Pill>{job.status}</Pill>
+                    <button className={btnSmClass} onClick={() => togglePosting(job)}>
+                      {job.status === 'open' ? 'Close' : 'Reopen'}
+                    </button>
+                  </>
+                }
+              />
+            ))
+          ) : (
+            <EmptyState text="You have no postings yet." />
+          )}
         </Card>
       </section>
     );
   }
 
+
   if (activePage === 'recruiter-applications') {
     return (
       <section>
-        <PageHeader title="Assigned Applications" subtitle="Review and progress your candidates." />
+        <PageHeader
+          title="Assigned Applications"
+          subtitle="Review and progress your candidates."
+          action={
+            <ExportMenu
+              options={[
+                {
+                  label: 'Assigned candidates (CSV)',
+                  path: '/api/exports/recruiter/assigned-applications.csv'
+                },
+                {
+                  label: 'My interviews (calendar file)',
+                  path: '/api/exports/recruiter/interviews.ics'
+                }
+              ]}
+            />
+          }
+        />
         <Card title="Assigned applications">
           <p className="mb-3.5 text-[13px] text-slate-500">
             Update status, add notes, and schedule interviews for candidates an admin assigned to you.
@@ -466,7 +530,21 @@ function RecruiterPortalPage({ activePage, currentUser, showToast }) {
 
     return (
       <section>
-        <PageHeader title="Interview Calendar" subtitle="Interviews you have scheduled." />
+        <PageHeader
+          title="Interview Calendar"
+          subtitle="Interviews you have scheduled."
+          action={
+            <ExportMenu
+              label="Export calendar"
+              options={[
+                {
+                  label: 'My interviews (calendar file)',
+                  path: '/api/exports/recruiter/interviews.ics'
+                }
+              ]}
+            />
+          }
+        />
         <div className="grid gap-3.5 lg:grid-cols-2">
           <Card>
             <MonthCalendar
@@ -500,40 +578,15 @@ function RecruiterPortalPage({ activePage, currentUser, showToast }) {
     return (
       <section>
         <PageHeader
-          title={activePage === 'recruiter-profile' ? 'Recruiter Profile' : 'Settings'}
-          subtitle="Recruiter profile and security."
+          title="Recruiter Profile"
+          subtitle="Your account details, email address, and password."
         />
-        <Card title="Recruiter profile" className="max-w-xl">
-          <div className="grid gap-3.5 md:grid-cols-2">
-            <Field label="Full name">
-              <input className={inputClass} defaultValue={currentUser?.name || ''} disabled />
-            </Field>
-            <Field label="Company">
-              <input className={inputClass} defaultValue={currentUser?.company || ''} disabled />
-            </Field>
-            <Field label="Email">
-              <input className={inputClass} defaultValue={currentUser?.email || ''} disabled />
-            </Field>
-            <Field label="Role">
-              <input className={inputClass} defaultValue="Recruiter" disabled />
-            </Field>
-          </div>
-        </Card>
-        <Card title="Account & security" className="max-w-xl">
-          <Field label="Current password">
-            <input type="password" className={inputClass} value={passwordForm.currentPassword}
-              placeholder="••••••••"
-              onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })} />
-          </Field>
-          <Field label="New password">
-            <input type="password" className={inputClass} value={passwordForm.newPassword}
-              placeholder="••••••••"
-              onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })} />
-          </Field>
-          <button className={btnPrimaryClass} disabled={changingPassword} onClick={changePassword}>
-            {changingPassword ? 'Changing...' : 'Change password'}
-          </button>
-        </Card>
+        <AccountPanel
+          currentUser={currentUser}
+          showToast={showToast}
+          onLogout={onLogout}
+          roleLabel="Recruiter"
+        />
       </section>
     );
   }

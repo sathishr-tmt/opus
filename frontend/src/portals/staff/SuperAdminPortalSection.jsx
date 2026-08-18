@@ -2,20 +2,22 @@
 // Dashboard, Admin Invitations, Account Oversight, Role Permissions, Audit Logs,
 // System Health, and System Settings, wired to /api/super-admin/*.
 import { useState, useEffect } from 'react';
-import { Download, Trash2 } from 'lucide-react';
+import { Download, Trash2, UserCheck, ShieldCheck, MailPlus, Users } from 'lucide-react';
 import { apiRequest, API_BASE } from '../../lib/api.js';
 import {
   PageHeader, Card, StatTile, Pill, ListItem, DataTable, Field,
-  inputClass, btnSmClass, btnPrimaryClass, EmptyState
+  inputClass, btnSmClass, btnPrimaryClass, EmptyState, ExportMenu, KpiCard, Tabs
 } from '../../components/ui.jsx';
 import { StatusDonut, HealthGauge } from '../../components/charts.jsx';
 import { formatRoleLabel } from '../../lib/constants.js';
+import { AccountPanel } from '../../components/AccountPanel.jsx';
+import { AdminJobSourcesPage } from './AdminPortalSection.jsx';
 
 function downloadUrl(path) {
   window.open(`${API_BASE}${path}`, '_blank');
 }
 
-function SuperAdminDashboard({ showToast, setActivePage }) {
+function SuperAdminDashboard({ showToast, setActivePage, embedded = false }) {
   const [accounts, setAccounts] = useState(null);
   const [invitations, setInvitations] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
@@ -57,14 +59,42 @@ function SuperAdminDashboard({ showToast, setActivePage }) {
 
   return (
     <section>
-      <PageHeader title="Dashboard" subtitle="Platform-wide control and oversight." />
+      {!embedded && (
+
+        <PageHeader title="Dashboard" subtitle="Platform-wide control and oversight." />
+
+      )}
       <div className="mb-4 grid gap-3.5 md:grid-cols-4">
         <button type="button" onClick={() => setActivePage('super-approvals')} className="text-left">
-          <StatTile label="Pending approvals" value={pendingCount} />
+          <KpiCard
+            label="Pending approvals"
+            value={pendingCount}
+            icon={UserCheck}
+            tone={pendingCount ? 'amber' : 'slate'}
+            onClick={() => setActivePage('super-approvals')}
+          />
         </button>
-        <StatTile label="Admins" value={accounts?.totals?.admin ?? 0} />
-        <StatTile label="Pending invites" value={pendingInvites} />
-        <StatTile label="Total accounts" value={(accounts?.accounts || []).length} />
+        <KpiCard
+          label="Admins"
+          value={accounts?.totals?.admin ?? 0}
+          icon={ShieldCheck}
+          tone="violet"
+          onClick={() => setActivePage('super-accounts')}
+        />
+        <KpiCard
+          label="Pending invites"
+          value={pendingInvites}
+          icon={MailPlus}
+          tone={pendingInvites ? 'blue' : 'slate'}
+          onClick={() => setActivePage('super-admins')}
+        />
+        <KpiCard
+          label="Total accounts"
+          value={(accounts?.accounts || []).length}
+          icon={Users}
+          tone="teal"
+          onClick={() => setActivePage('super-accounts')}
+        />
       </div>
 
       {(roleDonut.length > 0 || sources.length > 0) && (
@@ -131,7 +161,7 @@ function SuperAdminDashboard({ showToast, setActivePage }) {
   );
 }
 
-function AdminInvitationsPage({ showToast }) {
+function AdminInvitationsPage({ showToast, embedded = false }) {
   const [email, setEmail] = useState('');
   const [invitations, setInvitations] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -180,7 +210,11 @@ function AdminInvitationsPage({ showToast }) {
 
   return (
     <section>
-      <PageHeader title="Admin Invitations" subtitle="Invite and manage admin accounts." />
+      {!embedded && (
+
+        <PageHeader title="Admin Invitations" subtitle="Invite and manage admin accounts." />
+
+      )}
       <Card title="Invite an admin" className="max-w-2xl">
         <p className="mb-3.5 text-[13px] text-slate-500">
           Only a Super Admin can create admins. The invitee gets an email link to set their password.
@@ -232,7 +266,7 @@ function AdminInvitationsPage({ showToast }) {
   );
 }
 
-function AccountOversight({ showToast }) {
+function AccountOversight({ showToast, embedded = false }) {
   const [data, setData] = useState(null);
 
   function load() {
@@ -261,7 +295,11 @@ function AccountOversight({ showToast }) {
   if (!data) {
     return (
       <section>
-        <PageHeader title="Account Oversight" subtitle="View every account; switch Recruiter and Admin roles." />
+        {!embedded && (
+
+          <PageHeader title="Account Oversight" subtitle="View every account; switch Recruiter and Admin roles." />
+
+        )}
         <Card><EmptyState text="Loading accounts..." /></Card>
       </section>
     );
@@ -269,7 +307,11 @@ function AccountOversight({ showToast }) {
 
   return (
     <section>
-      <PageHeader title="Account Oversight" subtitle="View every account; switch Recruiter and Admin roles." />
+      {!embedded && (
+
+        <PageHeader title="Account Oversight" subtitle="View every account; switch Recruiter and Admin roles." />
+
+      )}
       <Card title="All accounts" action={<span className="text-[13px] text-slate-500">Super Admin controls</span>}>
         <div className="mb-4 grid gap-3.5 md:grid-cols-4">
           <StatTile label="Super Admins" value={data.totals.super_admin} />
@@ -306,7 +348,7 @@ function AccountOversight({ showToast }) {
   );
 }
 
-function PermissionsEditor({ showToast }) {
+function PermissionsEditor({ showToast, embedded = false }) {
   const [roles, setRoles] = useState([]);
   const [saving, setSaving] = useState('');
 
@@ -348,7 +390,11 @@ function PermissionsEditor({ showToast }) {
 
   return (
     <section>
-      <PageHeader title="Role Permissions" subtitle="Grant or revoke capabilities per role." />
+      {!embedded && (
+
+        <PageHeader title="Role Permissions" subtitle="Grant or revoke capabilities per role." />
+
+      )}
       <Card title="Role permissions">
         <p className="mb-1.5 text-[13px] text-slate-500">
           Grant or revoke capabilities for Admins and Recruiters. Some permissions are
@@ -397,7 +443,7 @@ function PermissionsEditor({ showToast }) {
   );
 }
 
-function AuditLogsPage({ showToast }) {
+function AuditLogsPage({ showToast, embedded = false }) {
   const [auditLogs, setAuditLogs] = useState([]);
 
   useEffect(() => {
@@ -408,13 +454,23 @@ function AuditLogsPage({ showToast }) {
 
   return (
     <section>
-      <PageHeader title="Audit Logs" subtitle="Every sensitive action on the platform." />
+      {!embedded && (
+
+        <PageHeader title="Audit Records" subtitle="Every sensitive action on the platform." />
+
+      )}
       <Card
-        title="Audit logs"
+        title="Audit records"
+        hint="Choose a date range to export only the period you need."
         action={
-          <button onClick={() => downloadUrl('/api/exports/super-admin/audit-logs.csv')} className={btnSmClass}>
-            <Download size={12} className="mr-1 inline" /> Export CSV
-          </button>
+          <ExportMenu
+            options={[
+              {
+                label: 'Audit records (CSV)',
+                path: '/api/exports/super-admin/audit-logs.csv'
+              }
+            ]}
+          />
         }
       >
         <p className="mb-3.5 text-[13px] text-slate-500">
@@ -442,7 +498,7 @@ function AuditLogsPage({ showToast }) {
   );
 }
 
-function SystemHealth({ showToast }) {
+function SystemHealth({ showToast, embedded = false }) {
   const [data, setData] = useState(null);
 
   useEffect(() => {
@@ -454,7 +510,11 @@ function SystemHealth({ showToast }) {
   if (!data) {
     return (
       <section>
-        <PageHeader title="System Health" subtitle="Database, email, and job sources." />
+        {!embedded && (
+
+          <PageHeader title="System Health" subtitle="Database, email, and job sources." />
+
+        )}
         <Card><EmptyState text="Loading system health..." /></Card>
       </section>
     );
@@ -466,7 +526,11 @@ function SystemHealth({ showToast }) {
 
   return (
     <section>
-      <PageHeader title="System Health" subtitle="Database, email, and job sources." />
+      {!embedded && (
+
+        <PageHeader title="System Health" subtitle="Database, email, and job sources." />
+
+      )}
 
       {sources.length > 0 && (
         <div className="mb-3.5 grid gap-3.5 lg:grid-cols-[1fr_2fr]">
@@ -516,7 +580,7 @@ function SystemHealth({ showToast }) {
   );
 }
 
-function SystemSettings({ showToast }) {
+function SystemSettings({ showToast, currentUser, onLogout, embedded = false }) {
   const [settings, setSettings] = useState(null);
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '' });
   const [changingPassword, setChangingPassword] = useState(false);
@@ -548,7 +612,11 @@ function SystemSettings({ showToast }) {
 
   return (
     <section>
-      <PageHeader title="System Settings" subtitle="Platform configuration and your account." />
+      {!embedded && (
+
+        <PageHeader title="System Settings" subtitle="Platform configuration and your account." />
+
+      )}
       <Card title="Platform settings" className="max-w-xl">
         {settings ? (
           <div className="grid gap-1.5 text-[13px] font-semibold text-slate-700">
@@ -587,11 +655,17 @@ function SystemSettings({ showToast }) {
           {changingPassword ? 'Changing...' : 'Change password'}
         </button>
       </Card>
+      <AccountPanel
+        currentUser={currentUser}
+        showToast={showToast}
+        onLogout={onLogout}
+        roleLabel="Super Admin"
+      />
     </section>
   );
 }
 
-function ApprovalsPage({ showToast }) {
+function ApprovalsPage({ showToast, embedded = false }) {
   const [pending, setPending] = useState(null);
   const [busy, setBusy] = useState('');
 
@@ -642,10 +716,14 @@ function ApprovalsPage({ showToast }) {
 
   return (
     <section>
-      <PageHeader
+      {!embedded && (
+
+        <PageHeader
         title="Approvals"
         subtitle="Review and approve new user, recruiter, and admin accounts."
       />
+
+      )}
       <Card
         title="Pending approvals"
         action={
@@ -695,23 +773,88 @@ function ApprovalsPage({ showToast }) {
   );
 }
 
-function SuperAdminPortalSection({ activePage, showToast, setActivePage = () => {} }) {
+
+/* ------------------------------------------------------------------ *
+ * Accounts — one page for the three account questions a Super Admin
+ * actually asks: who is waiting to be let in, who have we invited, and
+ * who already has an account. Previously three separate sidebar items.
+ * ------------------------------------------------------------------ */
+function AccountsPage({ showToast }) {
+  const [tab, setTab] = useState('approvals');
+  const [pendingCount, setPendingCount] = useState(0);
+
+  // Badge on the Approvals tab, so the queue is visible without opening it.
+  useEffect(() => {
+    apiRequest('/api/super-admin/pending-approvals')
+      .then((data) => setPendingCount((data.users || []).length))
+      .catch(() => setPendingCount(0));
+  }, [tab]);
+
+  return (
+    <section>
+      <PageHeader
+        title="Accounts"
+        subtitle="Approve access, invite admins, and oversee every account."
+      />
+
+      <Tabs
+        active={tab}
+        onChange={setTab}
+        items={[
+          { key: 'approvals', label: 'Approvals', count: pendingCount },
+          { key: 'invitations', label: 'Admin Invitations' },
+          { key: 'oversight', label: 'Account Oversight' }
+        ]}
+      />
+
+      {tab === 'approvals' && <ApprovalsPage showToast={showToast} embedded />}
+      {tab === 'invitations' && <AdminInvitationsPage showToast={showToast} embedded />}
+      {tab === 'oversight' && <AccountOversight showToast={showToast} embedded />}
+    </section>
+  );
+}
+
+function SuperAdminPortalSection({
+  activePage,
+  showToast,
+  setActivePage = () => {},
+  currentUser,
+  onLogout
+}) {
   if (activePage === 'super-dashboard') {
     return <SuperAdminDashboard showToast={showToast} setActivePage={setActivePage} />;
   }
-  if (activePage === 'super-approvals') return <ApprovalsPage showToast={showToast} />;
-  if (activePage === 'super-admins') return <AdminInvitationsPage showToast={showToast} />;
-  if (activePage === 'super-accounts') return <AccountOversight showToast={showToast} />;
+  // Approvals / Admin Invitations / Account Oversight are now tabs inside
+  // Accounts. The old page ids still resolve so existing links keep working.
+  if (
+    activePage === 'super-accounts' ||
+    activePage === 'super-approvals' ||
+    activePage === 'super-admins'
+  ) {
+    return <AccountsPage showToast={showToast} />;
+  }
   if (activePage === 'super-permissions') return <PermissionsEditor showToast={showToast} />;
+  if (activePage === 'super-sources') return <AdminJobSourcesPage showToast={showToast} />;
   if (activePage === 'super-audit') return <AuditLogsPage showToast={showToast} />;
   if (activePage === 'super-health' || activePage === 'super-platform') {
     return <SystemHealth showToast={showToast} />;
   }
-  if (activePage === 'super-settings') return <SystemSettings showToast={showToast} />;
+  if (activePage === 'super-settings')
+    return (
+      <SystemSettings
+        showToast={showToast}
+        currentUser={currentUser}
+        onLogout={onLogout}
+      />
+    );
 
   return (
     <section>
-      <PageHeader title="Super Admin Portal" subtitle="Manage OPUS governance and security." />
+      {!embedded && (
+
+        <PageHeader title="Super Admin Portal" subtitle="Manage OPUS governance and security." />
+
+      )}
       <Card><EmptyState text="Select a section from the sidebar." /></Card>
     </section>
   );

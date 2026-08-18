@@ -41,7 +41,7 @@ function Sidebar({ activePage, setActivePage, currentUser, onLogout, badges = {}
 
   return (
     <aside
-      className={`fixed bottom-0 left-0 z-20 overflow-hidden border-r border-slate-200 bg-white transition-all duration-300 ${isUserPortal ? 'top-[60px]' : 'top-[84px]'} ${
+      className={`fixed bottom-0 left-0 z-20 overflow-hidden border-r border-slate-200 bg-white transition-all duration-300 top-[60px] ${
         open ? (isUserPortal ? 'w-[238px]' : 'w-60') : 'w-0 border-r-0'
       }`}
     >

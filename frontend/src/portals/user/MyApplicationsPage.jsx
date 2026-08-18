@@ -9,10 +9,9 @@
 //  - Every entry can be deleted so the list stays manageable.
 //  - Filter chips narrow by kind or applied-status; Export downloads a CSV.
 import { useState, useEffect } from 'react';
-import { Download } from 'lucide-react';
 import { apiRequest } from '../../lib/api.js';
 import {
-  PageHeader, Card, StatTile, Pill, EmptyState,
+  PageHeader, Card, StatTile, Pill, EmptyState, ExportMenu,
   btnClass, btnPrimaryClass, inputClass
 } from '../../components/ui.jsx';
 
@@ -285,11 +284,15 @@ function MyApplicationsPage({ onDashboardChange, showToast }) {
         title="My Applications"
         subtitle="Everything you saved or applied to. Saved jobs can still be tailored."
         action={
-          <button className={btnClass} onClick={exportCsv}>
-            <span className="inline-flex items-center gap-2">
-              <Download size={15} /> Export CSV
-            </span>
-          </button>
+          <ExportMenu
+            options={[
+              { label: 'Applications (CSV)', path: '/api/exports/my-applications.csv' },
+              { label: 'Summary (PDF)', path: '/api/exports/my-applications.pdf' },
+              { label: 'Interviews (calendar file)', path: '/api/exports/my-interviews.ics' }
+            ]}
+            onLocalExport={exportCsv}
+            localLabel="Export this list as shown (CSV)"
+          />
         }
       />
 

@@ -3,7 +3,7 @@
 // Gemini-tailored version for the target job.
 import fs from 'fs';
 import PizZip from 'pizzip';
-import { geminiJson } from './gemini.js';
+import { llmJson } from './llm.js';
 
 function escapeXml(s = '') {
   return String(s)
@@ -49,8 +49,12 @@ Description: ${String(job.description || '').slice(0, 2500)}
 INPUT PARAGRAPHS (JSON array, in order):
 ${JSON.stringify(nonEmpty.map((n) => n.text))}`;
 
-  const result = await geminiJson(prompt);
+  const { data: result } = await llmJson(prompt);
   const rewritten = Array.isArray(result && result.paragraphs) ? result.paragraphs : [];
+
+  if (!rewritten.length) {
+    throw new Error('The rewrite came back empty; keeping the original resume.');
+  }
 
   // Map rewritten text back to the ORIGINAL paragraph indexes.
   const byIndex = new Map();

@@ -1,32 +1,93 @@
 // Shared UI kit — prototype design system (compact cards, pills, list items,
 // stat tiles, and a month calendar) plus the original shared components.
-import { useState } from 'react';
-import { RefreshCw, X } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { RefreshCw, X, Download, ChevronDown } from 'lucide-react';
+import { API_BASE } from '../lib/api.js';
 import { OpusMark } from './Logo.jsx';
 
-function PageHeader({ title, subtitle, action }) {
+function PageHeader({ title, subtitle, action, crumb }) {
   return (
-    <div className="mb-5 flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-      <div>
-        <h1 className="text-xl font-extrabold text-slate-900">{title}</h1>
-        {subtitle && <p className="mt-0.5 text-[13px] text-slate-500">{subtitle}</p>}
-      </div>
+    <div className="mb-5">
+      {crumb && <Breadcrumb {...crumb} />}
 
-      {action}
+      <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
+        <div>
+          <h1 className="text-xl font-extrabold text-slate-900">{title}</h1>
+          {subtitle && <p className="mt-0.5 text-[13px] text-slate-500">{subtitle}</p>}
+        </div>
+
+        {action}
+      </div>
     </div>
   );
 }
 
-function Card({ title, action, children, className = '' }) {
+/* Breadcrumb — "Admin / Job Sources". Section is muted, page is emphasised. */
+function Breadcrumb({ section, page }) {
+  return (
+    <p className="mb-1.5 text-xs text-slate-400">
+      <span className="font-bold text-slate-500">{section}</span>
+      {page ? <> {'/'} {page}</> : null}
+    </p>
+  );
+}
+
+function Card({ title, action, hint, children, className = '' }) {
   return (
     <div className={`mb-4 rounded-2xl border border-slate-200 bg-white p-[18px] ${className}`}>
       {(title || action) && (
-        <div className="mb-3 flex items-center justify-between">
+        <div className={`flex items-center justify-between ${hint ? 'mb-1' : 'mb-3'}`}>
           {title && <h2 className="text-base font-extrabold text-slate-900">{title}</h2>}
           {action}
         </div>
       )}
+      {hint && <p className="mb-3.5 text-xs text-slate-400">{hint}</p>}
       {children}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Feed — activity list: coloured icon tile, text, timestamp.
+ * items: [{ icon: LucideIcon, text, meta, tone }]
+ * ------------------------------------------------------------------ */
+const FEED_TONES = {
+  violet: 'bg-violet-50 text-violet-600',
+  blue: 'bg-blue-50 text-blue-600',
+  green: 'bg-green-50 text-green-600',
+  amber: 'bg-amber-50 text-amber-600',
+  red: 'bg-red-50 text-red-600',
+  slate: 'bg-slate-100 text-slate-600'
+};
+
+function Feed({ items = [] }) {
+  if (!items.length) return <EmptyState text="No recent activity." />;
+
+  return (
+    <div className="flex flex-col">
+      {items.map((item, index) => {
+        const Icon = item.icon;
+        return (
+          <div
+            key={index}
+            className="flex gap-3 border-b border-slate-100 py-2.5 last:border-b-0"
+          >
+            <span
+              className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[9px] ${
+                FEED_TONES[item.tone] || FEED_TONES.violet
+              }`}
+            >
+              {Icon ? <Icon size={15} /> : null}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-[13px] text-slate-700">{item.text}</p>
+              {item.meta && (
+                <p className="mt-px text-[11.5px] text-slate-400">{item.meta}</p>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -300,36 +361,44 @@ const KPI_TONES = {
   slate:  { icon: 'bg-slate-100 text-slate-600',  bar: 'bg-slate-600',  hover: 'hover:border-slate-300' }
 };
 
-function KpiCard({ label, value, icon: Icon, delta, deltaUp = true, progress, tone = 'violet', onClick }) {
+function KpiCard({ label, value, icon: Icon, progress, tone = 'violet', onClick }) {
   const clickable = typeof onClick === 'function';
   const palette = KPI_TONES[tone] || KPI_TONES.violet;
 
   return (
     <div
       onClick={onClick}
-      className={`rounded-2xl border border-slate-200 bg-white p-4 transition ${
-        clickable ? `cursor-pointer hover:-translate-y-px ${palette.hover}` : ''
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={(event) => {
+        if (!clickable) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onClick();
+        }
+      }}
+      title={clickable ? `Open ${label}` : undefined}
+      className={`rounded-xl border border-slate-200 bg-white p-3 transition ${
+        clickable
+          ? `cursor-pointer hover:-translate-y-px hover:shadow-sm ${palette.hover}`
+          : ''
       }`}
     >
-      <div className="flex items-center justify-between">
-        <span className="text-[12.5px] font-semibold text-slate-500">{label}</span>
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-[11.5px] font-semibold text-slate-500">{label}</span>
         {Icon && (
-          <span className={`flex h-8 w-8 items-center justify-center rounded-xl ${palette.icon}`}>
-            <Icon size={17} />
+          <span
+            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${palette.icon}`}
+          >
+            <Icon size={15} />
           </span>
         )}
       </div>
 
-      <p className="mt-2 text-[28px] font-extrabold leading-none text-slate-900">{value}</p>
-
-      {delta && (
-        <p className={`mt-1 text-xs font-bold ${deltaUp ? 'text-green-600' : 'text-red-600'}`}>
-          {deltaUp ? '▲' : '▼'} {delta}
-        </p>
-      )}
+      <p className="mt-1.5 text-[22px] font-extrabold leading-none text-slate-900">{value}</p>
 
       {progress != null && (
-        <div className="mt-2.5 h-[7px] overflow-hidden rounded-full bg-slate-100">
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
           <span
             className={`block h-full rounded-full ${palette.bar}`}
             style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
@@ -481,8 +550,190 @@ function KanbanBoard({ columns = [], items = [], getKey, getColumn, renderCard, 
   );
 }
 
+
+/* ------------------------------------------------------------------ *
+ * ExportMenu — download button with an optional date range.
+ *
+ * options: [{ label, path }]  path is a backend export route, e.g.
+ *          '/api/exports/my-applications.csv'
+ *
+ * The chosen range is sent as ?from=YYYY-MM-DD&to=YYYY-MM-DD. Leaving both
+ * blank exports everything.
+ * ------------------------------------------------------------------ */
+const EXPORT_PRESETS = [
+  ['7', 'Last 7 days'],
+  ['30', 'Last 30 days'],
+  ['90', 'Last 90 days'],
+  ['', 'All time']
+];
+
+function isoDaysAgo(days) {
+  const date = new Date();
+  date.setDate(date.getDate() - Number(days));
+  return date.toISOString().slice(0, 10);
+}
+
+function ExportMenu({ label = 'Export', options = [], onLocalExport, localLabel }) {
+  const [open, setOpen] = useState(false);
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const boxRef = useRef(null);
+
+  useEffect(() => {
+    function onClickAway(event) {
+      if (boxRef.current && !boxRef.current.contains(event.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onClickAway);
+    return () => document.removeEventListener('mousedown', onClickAway);
+  }, []);
+
+  function applyPreset(days) {
+    if (!days) {
+      setFrom('');
+      setTo('');
+      return;
+    }
+    setFrom(isoDaysAgo(days));
+    setTo(new Date().toISOString().slice(0, 10));
+  }
+
+  function download(path) {
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    const query = params.toString();
+    window.open(`${API_BASE}${path}${query ? `?${query}` : ''}`, '_blank');
+    setOpen(false);
+  }
+
+  const rangeSummary =
+    from || to ? `${from || 'start'} → ${to || 'today'}` : 'All time';
+
+  return (
+    <div ref={boxRef} className="relative inline-block">
+      <button
+        onClick={() => setOpen((value) => !value)}
+        className={`${btnClass} inline-flex items-center gap-2`}
+      >
+        <Download size={15} />
+        {label}
+        <ChevronDown size={14} className="text-slate-400" />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-[42px] z-40 w-[300px] rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+          <p className="mb-2 text-[10.5px] font-bold uppercase tracking-wide text-slate-400">
+            Date range
+          </p>
+
+          <div className="mb-2.5 flex flex-wrap gap-1.5">
+            {EXPORT_PRESETS.map(([days, presetLabel]) => (
+              <button
+                key={presetLabel}
+                onClick={() => applyPreset(days)}
+                className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11.5px] font-bold text-slate-600 hover:border-violet-300 hover:text-violet-700"
+              >
+                {presetLabel}
+              </button>
+            ))}
+          </div>
+
+          <div className="mb-2 grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-bold text-slate-500">From</span>
+              <input
+                type="date"
+                value={from}
+                max={to || undefined}
+                onChange={(event) => setFrom(event.target.value)}
+                className={inputClass}
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-bold text-slate-500">To</span>
+              <input
+                type="date"
+                value={to}
+                min={from || undefined}
+                onChange={(event) => setTo(event.target.value)}
+                className={inputClass}
+              />
+            </label>
+          </div>
+
+          <p className="mb-2.5 text-[11.5px] text-slate-400">
+            Exporting: <span className="font-bold text-slate-600">{rangeSummary}</span>
+          </p>
+
+          <div className="border-t border-slate-100 pt-2">
+            {options.map((option) => (
+              <button
+                key={option.path}
+                onClick={() => download(option.path)}
+                className="block w-full rounded-lg px-2.5 py-2 text-left text-[13px] font-bold text-slate-700 hover:bg-slate-50"
+              >
+                {option.label}
+              </button>
+            ))}
+
+            {onLocalExport && (
+              <button
+                onClick={() => { onLocalExport(); setOpen(false); }}
+                className="block w-full rounded-lg px-2.5 py-2 text-left text-[13px] font-bold text-slate-700 hover:bg-slate-50"
+              >
+                {localLabel || 'Export what is on screen (CSV)'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+/* ------------------------------------------------------------------ *
+ * Tabs — sub-navigation inside one page.
+ * items: [{ key, label, count }]
+ * ------------------------------------------------------------------ */
+function Tabs({ items = [], active, onChange }) {
+  return (
+    <div className="mb-4 flex flex-wrap gap-1 border-b border-slate-200">
+      {items.map((item) => {
+        const on = item.key === active;
+        return (
+          <button
+            key={item.key}
+            onClick={() => onChange(item.key)}
+            className={`-mb-px flex items-center gap-2 border-b-2 px-3.5 py-2 text-[13.5px] font-bold transition ${
+              on
+                ? 'border-violet-600 text-violet-700'
+                : 'border-transparent text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            {item.label}
+            {item.count > 0 && (
+              <span
+                className={`rounded-full px-1.5 text-[11px] font-extrabold ${
+                  on ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                {item.count}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export {
   PageHeader,
+  Tabs,
+  ExportMenu,
+  Breadcrumb,
+  Feed,
   KpiCard,
   Timeline,
   ConfirmModal,

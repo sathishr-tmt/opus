@@ -2,7 +2,8 @@
 // extracted DOCX text), then analyze it (auto-fill) or rewrite it for a job.
 import fs from 'fs';
 import mammoth from 'mammoth';
-import { geminiJson } from './gemini.js';
+import { llmJson } from './llm.js';
+import { extractText } from './resumeParse.js';
 
 // Build a Gemini content part from a resume file on disk.
 async function resumePart(filePath, mimeType = '') {
@@ -23,16 +24,20 @@ async function resumePart(filePath, mimeType = '') {
 // Parse a resume into structured profile fields.
 async function analyzeResume(filePath, mimeType) {
   const part = await resumePart(filePath, mimeType);
+  // Providers other than Gemini cannot accept a file, so carry a text copy.
+  const plain = await extractText(filePath, mimeType);
   const prompt =
 `You are an expert resume parser. Read the attached resume and return ONLY JSON with EXACTLY these keys:
 {"professionalTitle": string, "experienceYears": number, "skills": string[] (10-20 core technical skills, most important first), "professionalSummary": string (2-3 sentence professional summary), "location": string, "phone": string}
 Rules: infer experienceYears as a whole number from the work history. Only list skills the resume actually shows. If a field is unknown use "" (or 0, or []). Do not invent employers or degrees.`;
-  return geminiJson(prompt, part ? [part] : []);
+  const { data } = await llmJson(prompt, part ? [part] : [], plain);
+  return data;
 }
 
 // Rewrite a resume tailored to one job. Returns structured resume JSON.
 async function rewriteResume(profile = {}, job = {}, filePath, mimeType) {
   const part = await resumePart(filePath, mimeType);
+  const plain = await extractText(filePath, mimeType);
   const prompt =
 `You are an expert resume writer. Rewrite the candidate's resume so it is tailored and ATS-optimized for the TARGET JOB below. Stay truthful to the candidate's real experience from the attached resume and profile — do NOT fabricate employers, dates, degrees, or metrics that are not present. Naturally emphasize the job's key skills where the candidate genuinely has them.
 
@@ -63,7 +68,8 @@ Location: ${profile.location || ''}
 Phone: ${profile.phone || ''}
 Skills: ${profile.skills || ''}
 About: ${profile.about || ''}`;
-  return geminiJson(prompt, part ? [part] : []);
+  const { data } = await llmJson(prompt, part ? [part] : [], plain);
+  return data;
 }
 
 export { analyzeResume, rewriteResume };

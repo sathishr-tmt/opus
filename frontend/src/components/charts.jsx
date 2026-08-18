@@ -183,7 +183,7 @@ export function HealthGauge({ value = 0, color = '#7c3aed', height = 200 }) {
 }
 
 // ---- Activity heatmap ----
-export function ActivityHeatmap({ xLabels = [], yLabels = [], data = [], height = 250 }) {
+export function ActivityHeatmap({ xLabels = [], yLabels = [], data = [], max = 0, height = 250 }) {
   const dark = useDark();
   const option = useMemo(() => {
     const t = tokens(dark);
@@ -193,9 +193,9 @@ export function ActivityHeatmap({ xLabels = [], yLabels = [], data = [], height 
       grid: { left: 10, right: 16, top: 10, bottom: 22, containLabel: true },
       xAxis: { ...axis(t, 'category', xLabels), splitArea: { show: true } },
       yAxis: { ...axis(t, 'category', yLabels), splitArea: { show: true } },
-      visualMap: { show: false, min: 0, max: 80, inRange: { color: ['#f2edff', '#8b5cf6', '#6d28d9'] } },
+      visualMap: { show: false, min: 0, max: Math.max(1, max), inRange: { color: ['#f2edff', '#8b5cf6', '#6d28d9'] } },
       series: [{ type: 'heatmap', data, itemStyle: { borderColor: dark ? '#0b1120' : '#fff', borderWidth: 2, borderRadius: 4 } }]
     };
-  }, [dark, xLabels, yLabels, data]);
+  }, [dark, xLabels, yLabels, data, max]);
   return <EChart option={option} height={height} />;
 }

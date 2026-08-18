@@ -30,36 +30,65 @@ const userNavItems = [
 ];
 
 const recruiterNavItems = [
-  { id: 'recruiter-dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'recruiter-dashboard', label: 'Recruiter Dashboard', icon: LayoutDashboard },
+  // Creating a posting is an action on this page, not a separate destination.
   { id: 'recruiter-jobs', label: 'My Job Postings', icon: BriefcaseBusiness },
-  { id: 'recruiter-create-job', label: 'Create Job Posting', icon: PlusCircle },
   { id: 'recruiter-applications', label: 'Assigned Applications', icon: ClipboardList },
-  { id: 'recruiter-calendar', label: 'Interview Calendar', icon: CalendarCheck },
-  { id: 'recruiter-profile', label: 'Recruiter Profile', icon: UserCircle },
-  { id: 'recruiter-settings', label: 'Settings', icon: Settings }
+  { id: 'recruiter-calendar', label: 'Interview Calendar', icon: CalendarCheck }
+];
+
+// Shown in the top-right name dropdown rather than the sidebar.
+const recruiterMenuItems = [
+  { id: 'recruiter-profile', label: 'Recruiter Profile' },
+  { id: 'recruiter-settings', label: 'Settings' }
 ];
 
 const adminNavItems = [
-  { id: 'admin-dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'admin-applications', label: 'Applications', icon: ClipboardList },
+  { id: 'admin-dashboard', label: 'Admin Dashboard', icon: LayoutDashboard },
+  { id: 'admin-users', label: 'User Management', icon: Users },
+  { id: 'admin-recruiters', label: 'Recruiter Management', icon: ShieldCheck },
   { id: 'admin-jobs', label: 'Job Postings', icon: BriefcaseBusiness },
+  { id: 'admin-applications', label: 'Application Management', icon: ClipboardList },
   { id: 'admin-sources', label: 'Job Sources', icon: Database },
   { id: 'admin-calendar', label: 'Calendar & Interviews', icon: CalendarCheck },
   { id: 'admin-reports', label: 'Reports', icon: BarChart3 },
-  { id: 'admin-users', label: 'User Management', icon: Users },
-  { id: 'admin-settings', label: 'Settings', icon: Settings }
+  { id: 'admin-settings', label: 'Admin Settings', icon: Settings }
 ];
 
 const superAdminNavItems = [
   { id: 'super-dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'super-approvals', label: 'Approvals', icon: UserCheck },
-  { id: 'super-admins', label: 'Admin Invitations', icon: ShieldCheck },
-  { id: 'super-accounts', label: 'Account Oversight', icon: Users },
+  // Approvals, Admin Invitations and Account Oversight are tabs inside this
+  // one page — they are all "who has an account and should they".
+  { id: 'super-accounts', label: 'Accounts', icon: Users },
   { id: 'super-permissions', label: 'Role Permissions', icon: UserCheck },
-  { id: 'super-audit', label: 'Audit Logs', icon: FileText },
-  { id: 'super-health', label: 'System Health', icon: Database },
-  { id: 'super-settings', label: 'System Settings', icon: Settings }
+  { id: 'super-audit', label: 'Audit Records', icon: FileText }
 ];
+
+// Shown in the top-right name dropdown instead of the sidebar: platform
+// configuration a Super Admin visits occasionally, not daily.
+const superAdminMenuItems = [
+  { id: 'super-sources', label: 'Job Sources' },
+  { id: 'super-health', label: 'System Health' },
+  { id: 'super-settings', label: 'System Settings' }
+];
+
+// Sidebar label for one page id — used by the breadcrumb.
+function navItemsForRole(role) {
+  if (role === 'super_admin') return superAdminNavItems;
+  if (role === 'admin') return adminNavItems;
+  if (role === 'recruiter') return recruiterNavItems;
+  return userNavItems;
+}
+
+function navLabelFor(role, pageId) {
+  if (pageId === 'help') return 'Help & Support';
+  const fromMenu = [...superAdminMenuItems, ...recruiterMenuItems].find(
+    (entry) => entry.id === pageId
+  );
+  if (fromMenu) return fromMenu.label;
+  const item = navItemsForRole(role).find((entry) => entry.id === pageId);
+  return item ? item.label : '';
+}
 
 const ADMIN_ROLES = ['super_admin', 'admin'];
 
@@ -95,6 +124,10 @@ function formatMoney(value) {
 }
 
 export {
+  superAdminMenuItems,
+  recruiterMenuItems,
+  navItemsForRole,
+  navLabelFor,
   userNavItems,
   recruiterNavItems,
   adminNavItems,

@@ -9,7 +9,7 @@ import {
   UserRound
 } from 'lucide-react';
 import { apiRequest } from '../../lib/api.js';
-import { PageHeader, StatCard, Badge, EmptyState, Pill, btnPrimaryClass } from '../../components/ui.jsx';
+import { PageHeader, KpiCard, Badge, EmptyState, Pill, btnPrimaryClass } from '../../components/ui.jsx';
 import { StatusDonut, TrendChart } from '../../components/charts.jsx';
 
 // The dashboard shows the newest 6 entries from the unified saved+applied list.
@@ -22,7 +22,8 @@ function DashboardPage({
   gmailStatus,
   onConnectGmail,
   onCheckGmail,
-  onViewAll
+  onViewAll,
+  setActivePage
 }) {
   const [recent, setRecent] = useState([]);
   const [counts, setCounts] = useState({ savedCount: 0, appliedCount: 0, total: 0 });
@@ -125,32 +126,38 @@ function DashboardPage({
       {/* Applied and Saved are deliberately separate: the Applied number only
           moves when the user confirms they actually applied. */}
       <div className="grid gap-3.5 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          title="Applied"
+        {/* Each card opens the page it summarises. */}
+        <KpiCard
+          label="Applied"
           value={counts.appliedCount}
           icon={Briefcase}
           tone="blue"
+          onClick={() => setActivePage && setActivePage('applications')}
         />
 
-        <StatCard
-          title="Interviews Scheduled"
+        <KpiCard
+          label="Interviews Scheduled"
           value={dashboard?.interviews ?? dashboard?.upcomingInterviews ?? 0}
           icon={CalendarDays}
-          tone="yellow"
+          tone="amber"
+          onClick={() => setActivePage && setActivePage('calendar')}
         />
 
-        <StatCard
-          title="Saved / Recommended"
+        <KpiCard
+          label="Saved / Recommended"
           value={counts.savedCount}
           icon={Bookmark}
           tone="violet"
+          onClick={() => setActivePage && setActivePage('applications')}
         />
 
-        <StatCard
-          title="Profile Completion"
+        <KpiCard
+          label="Profile Completion"
           value={`${profileCompletion}%`}
           icon={UserRound}
           tone="green"
+          progress={profileCompletion}
+          onClick={() => setActivePage && setActivePage('profile')}
         />
       </div>
 

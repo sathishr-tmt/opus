@@ -22,7 +22,6 @@ export const FIXED_PERMISSIONS = {
     'posting:all:manage',
     'posting:delete',
     'application:all:view',
-    'application:assign',
     'interview:all:manage',
     'job-source:manage',
     'report:view',

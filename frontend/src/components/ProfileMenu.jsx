@@ -2,8 +2,8 @@
 // super admin). Clicking the avatar opens a small dropdown with the account
 // name/role, a Profile shortcut, Settings, and Sign Out.
 import { useState, useEffect, useRef } from 'react';
-import { UserCircle, Settings as SettingsIcon, LogOut } from 'lucide-react';
-import { formatRoleLabel } from '../lib/constants.js';
+import { UserCircle, Settings as SettingsIcon, LogOut, Database, Activity } from 'lucide-react';
+import { formatRoleLabel, superAdminMenuItems, recruiterMenuItems } from '../lib/constants.js';
 
 function initials(name) {
   return String(name || 'U')
@@ -81,12 +81,37 @@ function ProfileMenu({ currentUser, setActivePage, onLogout }) {
             </button>
           )}
 
-          <button
-            onClick={() => go(pages.settings)}
-            className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            <SettingsIcon size={17} /> Settings
-          </button>
+          {/* Super Admin keeps platform configuration here rather than in the
+              sidebar: visited occasionally, not part of the daily flow. */}
+          {role === 'super_admin' || role === 'recruiter' ? (
+            (role === 'super_admin' ? superAdminMenuItems : recruiterMenuItems).map((item) => {
+              const Icon =
+                item.id === 'super-sources'
+                  ? Database
+                  : item.id === 'super-health'
+                  ? Activity
+                  : item.id === 'recruiter-profile'
+                  ? UserCircle
+                  : SettingsIcon;
+
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => go(item.id)}
+                  className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  <Icon size={17} /> {item.label}
+                </button>
+              );
+            })
+          ) : (
+            <button
+              onClick={() => go(pages.settings)}
+              className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              <SettingsIcon size={17} /> Settings
+            </button>
+          )}
 
           <div className="border-t border-slate-100" />
 

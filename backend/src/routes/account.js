@@ -10,7 +10,7 @@ import {
   getUserSettingsRow, upsertUserSettings
 } from '../repos.js';
 import { escapeHtml, sendEmailChangeVerificationEmail } from '../email.js';
-import { validatePasswordStrength, hashSecurityToken, clearSessionCookies, requireAuth } from '../security.js';
+import { validatePasswordStrength, hashSecurityToken, clearSessionCookies, requireAuth, sanitizeUser } from '../security.js';
 
 export default function registerAccountRoutes(app) {
   app.post(
@@ -188,6 +188,43 @@ export default function registerAccountRoutes(app) {
       return res.status(500).send('Unable to verify the new email address.');
     }
   });
+
+
+  // Update your own basic details. Available to EVERY role — a recruiter or
+  // admin should be able to correct their own name without asking someone
+  // else. Role, company and status are deliberately not editable here:
+  // those are set by whoever created the account.
+  app.patch(
+    '/api/account/profile',
+    requireAuth,
+    async (req, res) => {
+      try {
+        const name = String(req.body.name || '').trim();
+
+        if (name.length < 2 || name.length > 80) {
+          return res.status(400).json({ message: 'Enter a name between 2 and 80 characters.' });
+        }
+
+        const updated = await updateUser(req.user.id, { name });
+
+        await addAuditLog({
+          actorId: req.user.id,
+          actorRole: req.user.role,
+          action: 'PROFILE_UPDATED',
+          targetUserId: req.user.id,
+          metadata: { name }
+        });
+
+        return res.json({
+          message: 'Profile updated.',
+          user: sanitizeUser(updated)
+        });
+      } catch (error) {
+        console.error('Profile update failed:', error);
+        return res.status(500).json({ message: 'Unable to update your profile.' });
+      }
+    }
+  );
 
   app.post(
     '/api/account/change-password',

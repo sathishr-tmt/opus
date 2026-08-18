@@ -10,6 +10,9 @@ import {
   upsertSourceHealth, listSourceHealth, getReportsSummary,
   getSetting, setSetting, parsePagination, countUsers
 } from '../repos.js';
+import {
+  platformGrowth, applicationsBySource, recruitmentPipeline, activityHeatmap
+} from '../analytics.js';
 import { getSourceHealthSnapshot, probeSources } from '../../jobSources.js';
 import { sendPasswordResetEmail, sendAccountApprovedEmail, sendAccountDeclinedEmail } from '../email.js';
 import { sanitizeUser, hashSecurityToken, requirePermission, requireAuth, requireRole, canManageAccount } from '../security.js';
@@ -429,6 +432,38 @@ export default function registerAdminRoutes(app) {
         message: 'User deleted successfully.',
         users: users.map(sanitizeUser)
       });
+    }
+  );
+
+
+  // Dashboard analytics — all four charts, computed from existing records.
+  app.get(
+    '/api/admin/analytics',
+    requireAuth,
+    requirePermission('report:view'),
+    async (req, res) => {
+      try {
+        const [usersResult, applications] = await Promise.all([
+          listUsers({}),
+          listApplications({ kind: 'internal' })
+        ]);
+
+        const users = usersResult.users || usersResult || [];
+
+        return res.json({
+          growth: platformGrowth(users, applications),
+          bySource: applicationsBySource(applications),
+          pipeline: recruitmentPipeline(applications),
+          heatmap: activityHeatmap(applications),
+          totals: {
+            users: users.length,
+            applications: applications.length
+          }
+        });
+      } catch (error) {
+        console.error('Admin analytics failed:', error);
+        return res.status(500).json({ message: 'Unable to load analytics.' });
+      }
     }
   );
 

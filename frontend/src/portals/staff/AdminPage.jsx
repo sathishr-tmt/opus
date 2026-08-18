@@ -1,12 +1,15 @@
 // Admin portal core pages — rebuilt to match the OPUS Admin Portal prototype:
 // Dashboard (platform overview), Recruiter Approvals, and User Management.
 import { useState, useEffect } from 'react';
+import { ShieldCheck, UserCheck, BriefcaseBusiness, ClipboardList } from 'lucide-react';
 import { apiRequest } from '../../lib/api.js';
 import {
   PageHeader, Card, StatTile, Pill, ListItem, DataTable,
-  inputClass, btnSmClass, EmptyState
+  inputClass, btnSmClass, EmptyState, KpiCard
 } from '../../components/ui.jsx';
-import { StatusDonut, BarComparison } from '../../components/charts.jsx';
+import {
+  StatusDonut, BarComparison, TrendChart, RecruitmentFunnel, ActivityHeatmap
+} from '../../components/charts.jsx';
 
 const ROLE_LABELS = {
   user: 'Users',
@@ -26,19 +29,22 @@ function AdminDashboardPage({ showToast, setActivePage }) {
   const [overview, setOverview] = useState(null);
   const [pending, setPending] = useState([]);
   const [applications, setApplications] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       try {
-        const [overviewData, pendingData, appsData] = await Promise.all([
+        const [overviewData, pendingData, appsData, analyticsData] = await Promise.all([
           apiRequest('/api/admin/overview'),
           apiRequest('/api/admin/pending-approvals'),
-          apiRequest('/api/admin/internal-applications')
+          apiRequest('/api/admin/internal-applications'),
+          apiRequest('/api/admin/analytics').catch(() => null)
         ]);
         setOverview(overviewData);
         setPending((pendingData.users || []).filter((u) => u.role === 'recruiter'));
         setApplications(appsData.applications || []);
+        setAnalytics(analyticsData);
       } catch (error) {
         showToast(error.message || 'Failed to load admin dashboard.');
       } finally {
@@ -69,25 +75,130 @@ function AdminDashboardPage({ showToast, setActivePage }) {
     <section>
       <PageHeader title="Dashboard" subtitle="Platform overview and operations." />
       <div className="mb-4 grid gap-3.5 md:grid-cols-4">
-        <StatTile label="Recruiters" value={overview?.usersByRole?.recruiter ?? 0} />
-        <StatTile label="Pending approvals" value={pending.length} />
-        <StatTile label="Job postings" value={overview?.totalJobs ?? 0} />
-        <StatTile label="Applications" value={overview?.totalApplications ?? 0} />
+        {/* Each card opens the page it summarises. */}
+        <KpiCard
+          label="Recruiters"
+          value={overview?.usersByRole?.recruiter ?? 0}
+          icon={ShieldCheck}
+          tone="violet"
+          onClick={() => setActivePage('admin-recruiters')}
+        />
+        <KpiCard
+          label="Pending approvals"
+          value={pending.length}
+          icon={UserCheck}
+          tone={pending.length ? 'amber' : 'slate'}
+          onClick={() => setActivePage('admin-recruiters')}
+        />
+        <KpiCard
+          label="Job postings"
+          value={overview?.totalJobs ?? 0}
+          icon={BriefcaseBusiness}
+          tone="blue"
+          onClick={() => setActivePage('admin-jobs')}
+        />
+        <KpiCard
+          label="Applications"
+          value={overview?.totalApplications ?? 0}
+          icon={ClipboardList}
+          tone="teal"
+          onClick={() => setActivePage('admin-applications')}
+        />
       </div>
 
-      {!loading && (roleDonut.length > 0 || statusCategories.length > 0) && (
-        <div className="mb-3.5 grid gap-3.5 lg:grid-cols-2">
-          {roleDonut.length > 0 && (
-            <Card title="Accounts by role">
-              <StatusDonut data={roleDonut} height={240} />
+      {/* Everything below is computed from real records — user.createdAt,
+          application.appliedAt, source and status. A chart with no data says
+          so rather than drawing an invented line. */}
+      {!loading && (
+        <>
+          <div className="mb-3.5 grid gap-3.5 lg:grid-cols-2">
+            <Card
+              title="Platform growth"
+              hint="Total users and applications over the last 6 months"
+            >
+              {analytics?.growth?.categories?.length ? (
+                <TrendChart
+                  categories={analytics.growth.categories}
+                  series={analytics.growth.series}
+                  height={240}
+                />
+              ) : (
+                <EmptyState text="No activity recorded yet." />
+              )}
             </Card>
-          )}
-          {statusCategories.length > 0 && (
-            <Card title="Applications by status">
-              <BarComparison categories={statusCategories} data={statusValues} height={240} />
+
+            <Card
+              title="Applications by source"
+              hint="Where the listings people applied to came from"
+            >
+              {analytics?.bySource?.categories?.length ? (
+                <BarComparison
+                  categories={analytics.bySource.categories}
+                  data={analytics.bySource.data}
+                  height={240}
+                />
+              ) : (
+                <EmptyState text="No applications yet." />
+              )}
             </Card>
-          )}
-        </div>
+          </div>
+
+          <div className="mb-3.5 grid gap-3.5 lg:grid-cols-2">
+            <Card
+              title="Recruitment pipeline"
+              hint="How far applications reach — each stage counts everyone who got at least that far"
+              action={
+                <button
+                  className="text-[13px] font-bold text-violet-700"
+                  onClick={() => setActivePage('admin-applications')}
+                >
+                  Applications &rarr;
+                </button>
+              }
+            >
+              {analytics?.pipeline?.length ? (
+                <RecruitmentFunnel data={analytics.pipeline} height={240} />
+              ) : (
+                <EmptyState text="No applications yet." />
+              )}
+            </Card>
+
+            <Card
+              title="Activity heatmap"
+              hint="When applications actually arrive, by day and time"
+            >
+              {analytics?.heatmap?.data?.length ? (
+                <ActivityHeatmap
+                  xLabels={analytics.heatmap.xLabels}
+                  yLabels={analytics.heatmap.yLabels}
+                  data={analytics.heatmap.data}
+                  max={analytics.heatmap.max}
+                  height={240}
+                />
+              ) : (
+                <EmptyState text="No applications yet." />
+              )}
+            </Card>
+          </div>
+
+          <div className="mb-3.5 grid gap-3.5 lg:grid-cols-2">
+            <Card title="Accounts by role" hint="Make-up of every account on the platform">
+              {roleDonut.length ? (
+                <StatusDonut data={roleDonut} height={240} />
+              ) : (
+                <EmptyState text="No accounts yet." />
+              )}
+            </Card>
+
+            <Card title="Applications by status" hint="Where applications sit right now">
+              {statusCategories.length ? (
+                <BarComparison categories={statusCategories} data={statusValues} height={240} />
+              ) : (
+                <EmptyState text="No applications yet." />
+              )}
+            </Card>
+          </div>
+        </>
       )}
 
       <div className="grid gap-3.5 lg:grid-cols-2">

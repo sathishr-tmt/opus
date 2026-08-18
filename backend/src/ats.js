@@ -164,6 +164,71 @@ function titleOverlap(userTitle = '', jobTitle = '') {
   return shared / jobWords.length;
 }
 
+
+// ---------------------------------------------------------------------------
+// Work-authorization requirements stated in a posting.
+//
+// These are HARD blockers rather than soft preferences: no amount of skill
+// overlap makes up for a clearance the candidate does not hold. They are
+// reported separately from the score so the UI can call them out plainly.
+// ---------------------------------------------------------------------------
+const AUTH_SIGNALS = [
+  {
+    key: 'no_sponsorship',
+    label: 'Does not sponsor visas',
+    patterns: [
+      'not able to sponsor', 'unable to sponsor', 'no sponsorship',
+      'without sponsorship', 'do not offer sponsorship', 'does not offer sponsorship',
+      'not provide sponsorship', 'no visa sponsorship'
+    ],
+    // Authorisations that satisfy the requirement anyway.
+    satisfiedBy: ['citizen', 'green card', 'permanent resident', 'gc', 'ead', 'authorized', 'authorised', 'no sponsorship required']
+  },
+  {
+    key: 'citizen_required',
+    label: 'Requires citizenship',
+    patterns: ['must be a u.s. citizen', 'us citizen', 'u.s. citizen', 'citizenship required'],
+    satisfiedBy: ['citizen']
+  },
+  {
+    key: 'clearance_required',
+    label: 'Requires security clearance',
+    patterns: ['security clearance', 'secret clearance', 'ts/sci', 'top secret'],
+    satisfiedBy: ['clearance', 'cleared']
+  }
+];
+
+function checkAuthorization(profile = {}, jobText = '') {
+  const haystack = ` ${String(jobText).toLowerCase()} `;
+  const authorization = String(profile.workAuthorization || '').toLowerCase();
+
+  const blockers = [];
+  let stated = false;
+
+  for (const signal of AUTH_SIGNALS) {
+    if (!signal.patterns.some((pattern) => haystack.includes(pattern))) continue;
+
+    stated = true;
+    const satisfied =
+      Boolean(authorization) &&
+      signal.satisfiedBy.some((term) => authorization.includes(term));
+
+    if (!satisfied) {
+      blockers.push({
+        label: signal.label,
+        // An unknown authorisation is a warning; a known mismatch is a blocker.
+        severity: authorization ? 'blocker' : 'unknown'
+      });
+    }
+  }
+
+  if (!stated) return { score: null, blockers: [] };
+  if (!blockers.length) return { score: 100, blockers: [] };
+
+  const hasHard = blockers.some((b) => b.severity === 'blocker');
+  return { score: hasHard ? 0 : 50, blockers };
+}
+
 function normalizeUserSkills(profile = {}) {
   const raw = profile.skills;
 
@@ -309,10 +374,59 @@ function scoreJob(profile = {}, job = {}) {
   // Keep the displayed number in a believable ATS range.
   const score = Math.max(25, Math.min(99, Math.round(total)));
 
+  // Skills the candidate has that this posting did NOT ask for. Genuine
+  // strengths worth surfacing, but they do not inflate the score.
+  const bonus = [...userSkillSet]
+    .filter((skill) => !requested.has(skill))
+    .slice(0, 10);
+
+  // Each dimension expressed 0-100 so the UI can draw comparable bars.
+  // These are the SAME calculations used for the total, just not yet weighted,
+  // so the bars always agree with the headline number.
+  const pct = (points, max) => Math.round((points / max) * 100);
+
+  const authorization = checkAuthorization(profile, jobText);
+
+  const breakdown = {
+    skills: requestedList.length
+      ? Math.round((matched.length / requestedList.length) * 100)
+      : pct(skillPoints, 60),
+    title: pct(titlePoints, 20),
+    experience: pct(experiencePoints, 10),
+    location: pct(fitPoints, 10)
+  };
+
+  // Seniority is reported separately because it is the clearest signal of an
+  // over- or under-levelled application.
+  const userYearsForLevel = Number(profile.experienceYears || 0);
+  const impliedLevel =
+    userYearsForLevel >= 8 ? 3 : userYearsForLevel >= 5 ? 2 : userYearsForLevel >= 2 ? 1 : 0;
+
+  if (jobLevel === null) {
+    breakdown.seniority = null; // posting does not state a level
+  } else {
+    const gap = Math.abs(impliedLevel - jobLevel);
+    breakdown.seniority = gap === 0 ? 100 : gap === 1 ? 60 : gap === 2 ? 30 : 10;
+  }
+
+  breakdown.authorization = authorization.score;
+
+  for (const blocker of authorization.blockers) {
+    reasons.push(
+      blocker.severity === 'blocker'
+        ? `${blocker.label} — your profile says "${profile.workAuthorization}".`
+        : `${blocker.label} — add your work authorization to Profile & Resume to check this.`
+    );
+  }
+
   return {
     score,
     matched,
     missing: missing.slice(0, 8),
+    bonus,
+    breakdown,
+    blockers: authorization.blockers,
+    requestedCount: requestedList.length,
     reasons
   };
 }
@@ -332,6 +446,8 @@ function attachAtsScores(profile = {}, jobs = []) {
       atsScore: null,
       atsMatched: [],
       atsMissing: [],
+      atsBonus: [],
+      atsBreakdown: null,
       atsReasons: ['Add your skills and target role in Profile & Resume to see ATS scores.']
     }));
   }
@@ -343,6 +459,8 @@ function attachAtsScores(profile = {}, jobs = []) {
       atsScore: result.score,
       atsMatched: result.matched,
       atsMissing: result.missing,
+      atsBonus: result.bonus,
+      atsBreakdown: result.breakdown,
       atsReasons: result.reasons
     };
   });

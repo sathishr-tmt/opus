@@ -7,7 +7,6 @@ import {
   Bookmark,
   Building2,
   CheckCircle2,
-  Database,
   ExternalLink,
   RefreshCw,
   Search,
@@ -16,54 +15,40 @@ import {
 import { apiRequest } from '../../lib/api.js';
 import { formatMoney } from '../../lib/constants.js';
 import { PageHeader, StatCard, Badge, EmptyState, FilterInput, FilterSelect } from '../../components/ui.jsx';
+import { MatchPanel } from '../../components/MatchPanel.jsx';
 
 function JobSearchPage({ onDashboardChange, showToast }) {
-  const careerCategories = [
-    'Backend Developer',
+  // Common job titles offered as dropdown suggestions. The Job Title field is a
+  // combo box: the user can pick one of these OR type any title of their own.
+  const jobTitleOptions = [
+    'Software Engineer',
+    'Software Developer',
     'Frontend Developer',
+    'Backend Developer',
     'Full Stack Developer',
     'Java Developer',
     'Python Developer',
     'React Developer',
-    'Angular Developer',
     'Node.js Developer',
-    'JavaScript Developer',
-    'TypeScript Developer',
-    'Software Developer',
-    'Software Engineer',
-    'API Developer',
-    'Cloud Engineer',
+    'Mobile App Developer',
     'DevOps Engineer',
-    'AWS Developer',
-    'Azure Developer',
+    'Cloud Engineer',
+    'Site Reliability Engineer',
     'Data Engineer',
+    'Data Analyst',
+    'Data Scientist',
     'Machine Learning Engineer',
     'AI Engineer',
-    'LLM Engineer',
     'QA Automation Engineer',
-    'SDET Engineer',
     'Cybersecurity Analyst',
-    'Site Reliability Engineer',
-    'Mobile App Developer',
-    'UI Developer',
-    'Database Developer'
-  ];
-
-  // Adzuna-supported countries (mapped to country codes in the backend).
-  const countryOptions = [
-    'United States',
-    'United Kingdom',
-    'Canada',
-    'Australia',
-    'India',
-    'Germany',
-    'France',
-    'Netherlands',
-    'Italy',
-    'Spain',
-    'Poland',
-    'Singapore',
-    'New Zealand'
+    'Database Administrator',
+    'Business Analyst',
+    'Product Manager',
+    'Project Manager',
+    'UI/UX Designer',
+    'Scrum Master',
+    'Systems Administrator',
+    'Network Engineer'
   ];
 
   // Full list of US states (+ DC). The backend passes this straight to the
@@ -97,8 +82,9 @@ function JobSearchPage({ onDashboardChange, showToast }) {
 
   const emptyFilters = {
     keyword: '',
-    category: '',
-    country: '',
+    // Country is fixed to the United States now that Location is a US-state
+    // dropdown; the backend still receives it and maps it to a country code.
+    country: 'United States',
     state: '',
     jobType: '',
     experienceYears: '',
@@ -118,6 +104,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
   const [loading, setLoading] = useState(false);
   const [showAllResults, setShowAllResults] = useState(false);
   const [selectedJob, setSelectedJob] = useState(null);
+  const [tailoring, setTailoring] = useState(false);
   const [pendingApplyJob, setPendingApplyJob] = useState(null);
   // Holds the job the user was sent away to apply for, until they come back.
   const awaitingReturnJobRef = useRef(null);
@@ -213,7 +200,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
   }
 
   async function searchJobs({ refresh = false } = {}) {
-    const searchTerm = filters.keyword.trim() || filters.category || 'developer';
+    const searchTerm = filters.keyword.trim() || 'developer';
     const nextRefreshNumber = refresh ? refreshNumber + 1 : refreshNumber;
 
     setLoading(true);
@@ -276,6 +263,44 @@ function JobSearchPage({ onDashboardChange, showToast }) {
       showToast(saved ? 'Job saved.' : 'Job removed from saved jobs.');
     } catch (error) {
       showToast(error.message || 'Unable to update saved jobs.');
+    }
+  }
+
+  // Tailor the resume for one job.
+  //
+  // Saving is a precondition on the backend, so an unsaved job is saved here
+  // first rather than returning an error the user has to act on themselves.
+  async function tailorResume(job) {
+    const isSaved = savedJobIds.includes(String(job.id));
+
+    if (job.atsScore != null && job.atsScore < 40) {
+      const proceed = window.confirm(
+        `This role scores ${job.atsScore}%.\n\n` +
+          `The missing skills are core requirements for it, and a rewrite cannot ` +
+          `add skills you have not listed.\n\nGenerate it anyway?`
+      );
+      if (!proceed) return;
+    }
+
+    setTailoring(true);
+
+    try {
+      if (!isSaved) {
+        const saved = await apiRequest(`/api/saved/${job.id}`, { method: 'POST' });
+        setSavedJobIds(saved.savedJobIds || []);
+      }
+
+      const data = await apiRequest('/api/documents/rewrite', {
+        method: 'POST',
+        body: { jobId: job.id }
+      });
+
+      showToast(data.message || 'Resume tailored. See My Resumes.');
+      await onDashboardChange();
+    } catch (error) {
+      showToast(error.message || 'Unable to tailor the resume.');
+    } finally {
+      setTailoring(false);
     }
   }
 
@@ -353,7 +378,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
           <button
             onClick={() => searchJobs({ refresh: true })}
             disabled={loading}
-            className="flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex items-center gap-2 rounded-[10px] border border-slate-200 bg-white px-3.5 py-2.5 text-[13px] font-bold text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <RefreshCw size={17} className={loading ? 'animate-spin' : ''} />
             {loading ? 'Refreshing...' : 'Refresh Results'}
@@ -361,42 +386,40 @@ function JobSearchPage({ onDashboardChange, showToast }) {
         }
       />
 
-      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="rounded-xl border border-slate-200 bg-white p-[18px] shadow-sm">
         <div className="mb-5">
-          <h2 className="text-lg font-black text-slate-900">
+          <h2 className="text-[15px] font-extrabold text-slate-900">
             Search Preferences
           </h2>
-          <p className="mt-1 text-sm leading-6 text-slate-500">
-            OPUS keeps the career title as the primary requirement. When exact
+          <p className="mt-1 max-w-4xl text-[13px] leading-5 text-slate-500">
+            OPUS keeps the job title as the primary requirement. When exact
             results are limited, it relaxes optional filters in stages and
             shows the change on each result.
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <FilterInput
-            label="Keyword or Job Title"
-            value={filters.keyword}
-            onChange={(value) => updateFilter('keyword', value)}
-            placeholder="Example: Java Spring Boot"
-          />
+        <div className="grid gap-3.5 md:grid-cols-2 xl:grid-cols-4">
+          {/* Job Title: a combo box — type any title, or pick from the list. */}
+          <label className="block">
+            <span className="mb-1.5 block text-[13px] font-bold text-slate-600">
+              Job Title
+            </span>
+            <input
+              list="jobTitleOptions"
+              value={filters.keyword}
+              onChange={(event) => updateFilter('keyword', event.target.value)}
+              placeholder="Type a title, or pick from the list"
+              className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[13px] outline-none transition focus:border-violet-500"
+            />
+            <datalist id="jobTitleOptions">
+              {jobTitleOptions.map((title) => (
+                <option key={title} value={title} />
+              ))}
+            </datalist>
+          </label>
 
           <FilterSelect
-            label="Career Category"
-            value={filters.category}
-            onChange={(value) => updateFilter('category', value)}
-            options={careerCategories}
-          />
-
-          <FilterSelect
-            label="Country"
-            value={filters.country}
-            onChange={(value) => updateFilter('country', value)}
-            options={countryOptions}
-          />
-
-          <FilterSelect
-            label="State / Province"
+            label="Location"
             value={filters.state}
             onChange={(value) => updateFilter('state', value)}
             options={stateOptions}
@@ -455,25 +478,30 @@ function JobSearchPage({ onDashboardChange, showToast }) {
             placeholder="Example: 150000"
           />
 
-          <FilterSelect
-            label="Date Posted"
-            value={filters.postedWithinDays}
-            onChange={(value) => updateFilter('postedWithinDays', value)}
-            options={[
-              '1',
-              '3',
-              '7',
-              '14',
-              '30'
-            ]}
-          />
+          {/* Date Posted — LinkedIn-style options. Values are days-old; the
+              backend reads postedWithinDays (empty = Any time / no limit). */}
+          <label className="block">
+            <span className="mb-1.5 block text-[13px] font-bold text-slate-600">
+              Date Posted
+            </span>
+            <select
+              value={filters.postedWithinDays}
+              onChange={(event) => updateFilter('postedWithinDays', event.target.value)}
+              className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[13px] outline-none transition focus:border-violet-500"
+            >
+              <option value="">Any time</option>
+              <option value="1">Past 24 hours</option>
+              <option value="7">Past week</option>
+              <option value="30">Past month</option>
+            </select>
+          </label>
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-3">
+        <div className="mt-5 flex flex-wrap gap-2.5">
           <button
             onClick={() => searchJobs()}
             disabled={loading}
-            className="rounded-xl bg-violet-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-violet-100 hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-[10px] bg-violet-600 px-4 py-2.5 text-[13px] font-bold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loading ? 'Searching...' : 'Search Opportunities'}
           </button>
@@ -481,7 +509,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
           <button
             onClick={clearFilters}
             disabled={loading}
-            className="rounded-xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-200 disabled:opacity-60"
+            className="rounded-[10px] border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
           >
             Clear Filters
           </button>
@@ -489,7 +517,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
       </div>
 
       {sources.length > 0 && (
-        <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-[18px] shadow-sm">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h2 className="font-black text-slate-900">Connected Job Sources</h2>
@@ -518,7 +546,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
       )}
 
       {warnings.length > 0 && (
-        <div className="mt-6 rounded-3xl border border-amber-200 bg-amber-50 p-5">
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
           <div className="flex items-start gap-3">
             <AlertTriangle className="mt-0.5 shrink-0 text-amber-600" size={20} />
             <div>
@@ -539,7 +567,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
       )}
 
       {hasSearched && (
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             title="Exact Matches"
             value={matchSummary.exact || 0}
@@ -567,13 +595,13 @@ function JobSearchPage({ onDashboardChange, showToast }) {
         </div>
       )}
 
-      <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-[18px] shadow-sm">
         <div className="mb-5 flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
           <div>
-            <h2 className="text-lg font-black text-slate-900">
+            <h2 className="text-[15px] font-extrabold text-slate-900">
               Search Results ({jobs.length})
             </h2>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-xs text-slate-500">
               Showing {visibleJobs.length} of {jobs.length}. Results are ranked
               by title, location, work mode, experience, salary, authorization,
               and freshness.
@@ -583,7 +611,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
           {jobs.length > 10 && (
             <button
               onClick={() => setShowAllResults((previous) => !previous)}
-              className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-200"
+              className="rounded-[10px] border border-slate-200 bg-white px-3.5 py-2 text-[13px] font-bold text-slate-700 hover:bg-slate-50"
             >
               {showAllResults ? 'Show Top 10' : 'View All Results'}
             </button>
@@ -592,7 +620,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
 
         {visibleJobs.length ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1250px] border-separate border-spacing-y-3 text-left">
+            <table className="opus-data-table w-full min-w-[1250px] border-collapse text-left">
               <thead>
                 <tr className="text-xs uppercase tracking-wide text-slate-400">
                   <th className="px-4 py-2">Match</th>
@@ -612,8 +640,8 @@ function JobSearchPage({ onDashboardChange, showToast }) {
                   const isSaved = savedJobIds.includes(String(job.id));
 
                   return (
-                    <tr key={job.id} className="bg-slate-50 align-top">
-                      <td className="rounded-l-2xl px-4 py-4">
+                    <tr key={job.id} className="align-top transition hover:bg-slate-50">
+                      <td className="px-4 py-4">
                         {/* ATS score: how well the user's profile matches this posting. */}
                         {job.atsScore != null ? (
                           <span
@@ -693,18 +721,18 @@ function JobSearchPage({ onDashboardChange, showToast }) {
                         </span>
                       </td>
 
-                      <td className="rounded-r-2xl px-4 py-4">
+                      <td className="px-4 py-4">
                         <div className="flex min-w-[220px] flex-wrap gap-2">
                           <button
                             onClick={() => setSelectedJob(job)}
-                            className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white"
+                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
                           >
                             View JD
                           </button>
 
                           <button
                             onClick={() => toggleSaved(job)}
-                            className={`flex items-center gap-1 rounded-xl px-3 py-2 text-xs font-black ${
+                            className={`flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-bold ${
                               isSaved
                                 ? 'bg-violet-100 text-violet-700'
                                 : 'bg-white text-slate-600'
@@ -719,7 +747,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
 
                           <button
                             onClick={() => beginApplication(job)}
-                            className="flex items-center gap-1 rounded-xl bg-violet-600 px-3 py-2 text-xs font-black text-white hover:bg-violet-700"
+                            className="flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-2 text-xs font-bold text-white hover:bg-violet-700"
                           >
                             Apply
                             <ExternalLink size={14} />
@@ -745,7 +773,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
 
       {selectedJob && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/60 p-6 backdrop-blur-sm">
-          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
+          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-xl border border-slate-200 bg-white p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -793,7 +821,7 @@ function JobSearchPage({ onDashboardChange, showToast }) {
                 ['Salary', formatSalary(selectedJob)],
                 ['Source', selectedJob.source || 'Public Job Feed']
               ].map(([label, value]) => (
-                <div key={label} className="rounded-2xl bg-slate-50 p-4">
+                <div key={label} className="rounded-xl border border-slate-100 bg-slate-50 p-3.5">
                   <p className="text-xs font-black uppercase text-slate-400">
                     {label}
                   </p>
@@ -803,60 +831,31 @@ function JobSearchPage({ onDashboardChange, showToast }) {
             </div>
 
             {selectedJob.relaxedFilters?.length > 0 && (
-              <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800">
+              <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800">
                 OPUS relaxed these filters to include this opportunity:{' '}
                 {selectedJob.relaxedFilters.join(', ')}.
               </div>
             )}
 
-            {/* Why this job scored what it scored. */}
-            {selectedJob.atsScore != null && (
-              <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-5">
-                <h3 className="font-black text-slate-900">
-                  ATS match: {selectedJob.atsScore}%
-                </h3>
+            {/* Description on the left, match analysis on the right. */}
+            <div className="mt-5 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+              <div className="rounded-xl bg-slate-50 p-4">
+                <h3 className="font-black text-slate-900">Job Description</h3>
 
-                {selectedJob.atsReasons?.length > 0 && (
-                  <ul className="mt-3 grid gap-1.5 text-sm font-bold text-slate-600">
-                    {selectedJob.atsReasons.map((reason, index) => (
-                      <li key={index}>· {reason}</li>
-                    ))}
-                  </ul>
-                )}
-
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <p className="text-xs font-black uppercase text-slate-400">
-                      Skills you have
-                    </p>
-                    <p className="mt-1 text-sm font-bold text-green-700">
-                      {selectedJob.atsMatched?.length
-                        ? selectedJob.atsMatched.join(', ')
-                        : 'None detected'}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs font-black uppercase text-slate-400">
-                      Skills to add
-                    </p>
-                    <p className="mt-1 text-sm font-bold text-amber-700">
-                      {selectedJob.atsMissing?.length
-                        ? selectedJob.atsMissing.join(', ')
-                        : 'Nothing missing'}
-                    </p>
-                  </div>
-                </div>
+                <p className="mt-3 whitespace-pre-line text-sm leading-7 text-slate-600">
+                  {selectedJob.description ||
+                    'The job description was not provided by this source.'}
+                </p>
               </div>
-            )}
 
-            <div className="mt-5 rounded-2xl bg-slate-50 p-5">
-              <h3 className="font-black text-slate-900">Job Description</h3>
-
-              <p className="mt-3 whitespace-pre-line text-sm leading-7 text-slate-600">
-                {selectedJob.description ||
-                  'The job description was not provided by this source.'}
-              </p>
+              <MatchPanel
+                job={selectedJob}
+                jobId={String(selectedJob.id)}
+                showToast={showToast}
+                rewriting={tailoring}
+                onRewrite={() => tailorResume(selectedJob)}
+                saved={savedJobIds.includes(String(selectedJob.id))}
+              />
             </div>
 
             <div className="mt-5 flex flex-wrap justify-end gap-3">
@@ -884,8 +883,8 @@ function JobSearchPage({ onDashboardChange, showToast }) {
 
       {pendingApplyJob && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-6 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-7 shadow-2xl">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-50 text-violet-600">
+          <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
               <CheckCircle2 size={27} />
             </div>
 

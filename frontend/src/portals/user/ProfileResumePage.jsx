@@ -8,35 +8,11 @@ import {
   Sparkles
 } from 'lucide-react';
 import { apiRequest, API_BASE } from '../../lib/api.js';
-import {
-  PageHeader, FilterInput, FilterSelect, Card, Pill, ListItem,
-  btnSmClass, EmptyState, ConfirmModal
-} from '../../components/ui.jsx';
+import { PageHeader, FilterInput, FilterSelect } from '../../components/ui.jsx';
 
-function formatSize(bytes) {
-  if (!bytes) return '';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
-function formatAge(createdAt) {
-  if (!createdAt) return '';
-  const created = new Date(createdAt);
-  if (Number.isNaN(created.getTime())) return '';
-
-  const days = Math.floor((Date.now() - created.getTime()) / 86400000);
-  if (days <= 0) return 'uploaded today';
-  if (days === 1) return 'uploaded 1d ago';
-  if (days < 30) return `uploaded ${days}d ago`;
-  return `uploaded ${created.toLocaleDateString()}`;
-}
 
 function ProfileResumePage({ onDashboardChange, showToast, currentUser }) {
-  // Tailored resumes were previously a separate "My Resumes" page. They live
-  // here now so there is one place that owns resume files.
-  const [tailored, setTailored] = useState([]);
-  const [pendingDelete, setPendingDelete] = useState(null);
   const [profile, setProfile] = useState({
     name: '',
     email: '',
@@ -62,29 +38,9 @@ function ProfileResumePage({ onDashboardChange, showToast, currentUser }) {
       // non-fatal
     }
 
-    try {
-      const all = await apiRequest('/api/documents');
-      setTailored(all.tailored || []);
-    } catch (error) {
-      // non-fatal
-    }
   }
 
-  function downloadDocument(documentId) {
-    window.open(`${API_BASE}/api/documents/${documentId}/download`, '_blank');
-  }
 
-  async function deleteTailored(document) {
-    try {
-      await apiRequest(`/api/documents/${document.id}`, { method: 'DELETE' });
-      showToast('Document deleted.');
-      await loadResumes();
-    } catch (error) {
-      showToast(error.message || 'Unable to delete this document.');
-    } finally {
-      setPendingDelete(null);
-    }
-  }
   useEffect(() => { loadResumes(); }, []);
 
   // Read the uploaded resume with AI and drop the details into the form. The
@@ -352,79 +308,6 @@ function ProfileResumePage({ onDashboardChange, showToast, currentUser }) {
         </div>
       </div>
 
-      {/* Tailored resumes — created by Rewrite in Job Search. Each version is
-          tuned to one posting and keeps its own match score. */}
-      <div className="mt-4">
-        <Card title="Tailored resumes">
-          <p className="mb-3.5 text-[13px] text-slate-500">
-            Created with Rewrite in Job Search. Each version is tuned to one job
-            posting and keeps its own match score.
-          </p>
-
-          {tailored.length ? (
-            tailored.map((document) => (
-              <ListItem
-                key={document.id}
-                title={document.originalName}
-                meta={
-                  document.label ||
-                  [
-                    document.matchScore != null ? `${document.matchScore}% match` : null,
-                    document.jobTitle,
-                    document.company ? `@ ${document.company}` : null,
-                    document.sizeBytes ? formatSize(document.sizeBytes) : null
-                  ]
-                    .filter(Boolean)
-                    .join(' · ') ||
-                  formatAge(document.createdAt)
-                }
-                right={
-                  <>
-                    {document.matchScore != null && (
-                      <Pill
-                        tone={
-                          document.matchScore >= 80
-                            ? 'green'
-                            : document.matchScore >= 60
-                            ? 'blue'
-                            : 'amber'
-                        }
-                      >
-                        {document.matchScore}%
-                      </Pill>
-                    )}
-                    <button className={btnSmClass} onClick={() => downloadDocument(document.id)}>
-                      Download
-                    </button>
-                    <button
-                      className="rounded-lg bg-red-50 px-2.5 py-1 text-[11px] font-bold text-red-700 hover:bg-red-100"
-                      onClick={() => setPendingDelete(document)}
-                    >
-                      Delete
-                    </button>
-                  </>
-                }
-              />
-            ))
-          ) : (
-            <EmptyState text="No tailored resumes yet. Use Rewrite on a job in Job Search to create one." />
-          )}
-        </Card>
-      </div>
-
-      <ConfirmModal
-        open={Boolean(pendingDelete)}
-        title="Delete this resume?"
-        body={
-          pendingDelete
-            ? `"${pendingDelete.originalName}" will be permanently removed. This cannot be undone.`
-            : ''
-        }
-        confirmLabel="Delete"
-        tone="red"
-        onConfirm={() => deleteTailored(pendingDelete)}
-        onCancel={() => setPendingDelete(null)}
-      />
     </section>
   );
 }

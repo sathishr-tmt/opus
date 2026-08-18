@@ -252,6 +252,62 @@ export default function registerDocumentRoutes(app) {
     }
   );
 
+
+  // Match analysis for one job — powers the "Your AI match" panel.
+  // Read-only: computes the score, never writes a document.
+  app.post(
+    '/api/documents/match',
+    requireAuth,
+    requireRole('user'),
+    async (req, res) => {
+      try {
+        const jobId = String(req.body.jobId || '');
+        if (!jobId) {
+          return res.status(400).json({ message: 'A job must be selected.' });
+        }
+
+        const saved = await listSavedJobs(req.user.id);
+        const savedEntry = saved.find((item) => String(item.jobId) === jobId);
+        const job = savedEntry?.snapshot || getJob(jobId) || req.body.job;
+
+        if (!job) {
+          return res.status(404).json({ message: 'This job is no longer available.' });
+        }
+
+        const profile = await getUserSettingsRow(req.user.id);
+        const hasProfile =
+          String(profile?.skills || '').trim() || profile?.professionalTitle;
+
+        if (!hasProfile) {
+          return res.status(400).json({
+            message: 'Add your skills and target role in Profile & Resume first.',
+            needsProfile: true
+          });
+        }
+
+        const result = scoreJob(
+          { ...profile, name: profile.name || req.user.name, email: req.user.email },
+          job
+        );
+
+        return res.json({
+          score: result.score,
+          breakdown: result.breakdown,
+          matched: result.matched,
+          missing: result.missing,
+          bonus: result.bonus,
+          blockers: result.blockers || [],
+          reasons: result.reasons,
+          requestedCount: result.requestedCount,
+          job: { title: job.title, company: job.company, location: job.location }
+        });
+      } catch (error) {
+        console.error('Match analysis failed:', error);
+        return res.status(500).json({ message: 'Unable to analyse this job right now.' });
+      }
+    }
+  );
+
   // Resume Rewrite — generate a resume tailored to ONE saved job.
   //
   // Only SAVED jobs qualify: once an application has been submitted, tailoring

@@ -1,6 +1,7 @@
 // Minimal Google Gemini (Generative Language API) client using fetch.
 // Key + model come from the environment so nothing is hard-coded.
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+// gemini-2.0-flash was retired on 3 March 2026 — calls to it now 404.
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 function geminiConfigured() {
@@ -11,7 +12,9 @@ async function callGemini(parts, { json = false } = {}) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error('GEMINI_API_KEY is not set.');
 
-  const url = `${GEMINI_BASE}/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(key)}`;
+  // New-format Gemini "Auth keys" (AQ.Ab...) authenticate with the
+  // x-goog-api-key header; the legacy ?key= parameter was for AIza keys.
+  const url = `${GEMINI_BASE}/${GEMINI_MODEL}:generateContent`;
   const body = {
     contents: [{ role: 'user', parts }],
     generationConfig: {
@@ -25,7 +28,10 @@ async function callGemini(parts, { json = false } = {}) {
   try {
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': key
+      },
       body: JSON.stringify(body),
       signal: controller.signal
     });

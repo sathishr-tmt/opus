@@ -10,7 +10,8 @@ import { ResumeOnboarding } from './pages/ResumeOnboarding.jsx';
 import { readStoredUser, saveSession, clearSession, apiRequest } from './lib/api.js';
 import { LOGIN_PATH, ROLE_HOME_PATHS, ROLE_LOGIN_PATHS, getPathForPage, getPageForPath, navigateTo, STAFF_INACTIVITY_LIMIT_MS, USER_INACTIVITY_LIMIT_MS } from './lib/router.js';
 import { resolveInitialTheme, applyTheme, saveTheme } from './lib/theme.js';
-import { Toast, SessionVerificationScreen } from './components/ui.jsx';
+import { Toast, SessionVerificationScreen, Breadcrumb } from './components/ui.jsx';
+import { navLabelFor, formatRoleLabel } from './lib/constants.js';
 import { Sidebar } from './components/Sidebar.jsx';
 import { TopBar } from './components/TopBar.jsx';
 import { HelpSupportPage } from './components/HelpSupportPage.jsx';
@@ -56,6 +57,7 @@ function App() {
     currentUserRef.current = currentUser;
   }, [currentUser]);
 
+  const [navBadges, setNavBadges] = useState({});
   const [gmailStatus, setGmailStatus] = useState({
     connected: false,
     alerts: []
@@ -402,6 +404,34 @@ function App() {
     };
   }, [currentUser?.role]);
 
+  // Sidebar count badges (unassigned applications, pending approvals, ...).
+  // Same endpoint the notification bell uses, so it is one round trip.
+  useEffect(() => {
+    if (!currentUser) {
+      setNavBadges({});
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    async function loadBadges() {
+      try {
+        const data = await apiRequest('/api/notifications');
+        if (!cancelled) setNavBadges(data.badges || {});
+      } catch {
+        if (!cancelled) setNavBadges({});
+      }
+    }
+
+    loadBadges();
+    const timer = setInterval(loadBadges, 120000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [currentUser?.id, activePage]);
+
   if (checkingSession) {
     return <SessionVerificationScreen />;
   }
@@ -492,11 +522,17 @@ function App() {
         setActivePage={setActivePage}
         currentUser={currentUser}
         onLogout={handleLogout}
+        badges={navBadges}
         open={sidebarOpen}
       />
 
-      <main className={`min-h-screen transition-all duration-300 ${isUserPortal ? 'pt-[60px]' : 'pt-[84px]'} ${sidebarOpen ? (isUserPortal ? 'ml-0 md:ml-[238px]' : 'ml-60') : 'ml-0'}`}>
+      <main className={`min-h-screen transition-all duration-300 pt-[60px] ${sidebarOpen ? (isUserPortal ? 'ml-0 md:ml-[238px]' : 'ml-60') : 'ml-0'}`}>
         <div className={`${isUserPortal ? 'opus-page' : ''} px-7 py-6`}>
+          <Breadcrumb
+            section={formatRoleLabel(currentUser.role)}
+            page={navLabelFor(currentUser.role, activePage)}
+          />
+
           {activePage === 'help' && (
             <HelpSupportPage currentUser={currentUser} />
           )}
@@ -512,6 +548,7 @@ function App() {
                   onConnectGmail={connectGmail}
                   onCheckGmail={checkGmailResponses}
                   onViewAll={() => setActivePage('applications')}
+                  setActivePage={setActivePage}
                 />
               )}
 
@@ -565,6 +602,8 @@ function App() {
               activePage={activePage}
               currentUser={currentUser}
               showToast={showToast}
+              setActivePage={setActivePage}
+              onLogout={handleLogout}
             />
           )}
 
@@ -573,6 +612,8 @@ function App() {
               activePage={activePage}
               showToast={showToast}
               setActivePage={setActivePage}
+              currentUser={currentUser}
+              onLogout={handleLogout}
             />
           )}
 
@@ -581,6 +622,8 @@ function App() {
               activePage={activePage}
               showToast={showToast}
               setActivePage={setActivePage}
+              currentUser={currentUser}
+              onLogout={handleLogout}
             />
           )}
         </div>

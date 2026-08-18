@@ -25,6 +25,7 @@ import registerUserRoutes from './src/routes/user.js';
 import registerGmailRoutes from './src/routes/gmail.js';
 import registerDocumentRoutes from './src/routes/documents.js';
 import registerExportRoutes from './src/routes/exports.js';
+import registerSearchRoutes from './src/routes/search.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -104,6 +105,7 @@ registerUserRoutes(app);
 registerGmailRoutes(app);
 registerDocumentRoutes(app);
 registerExportRoutes(app);
+registerSearchRoutes(app);
 
 app.use(express.static(FRONTEND_DIST));
 
