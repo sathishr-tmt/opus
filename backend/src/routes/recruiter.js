@@ -74,11 +74,20 @@ export default function registerRecruiterRoutes(app) {
     requirePermission('staff:portal'),
     requireRole('recruiter'),
     async (req, res) => {
-      const [jobs, candidates, assigned] = await Promise.all([
+      const [jobs, candidates, everything] = await Promise.all([
         listPlatformJobs({ recruiterId: req.user.id }),
         myCandidates(req.user.id),
-        myApplications(req.user.id, { kind: 'internal' })
+        // Everything their candidates have done, external feeds included.
+        // A recruiter looking after someone should see the whole picture,
+        // not just the jobs that happen to be posted on OPUS.
+        myApplications(req.user.id)
       ]);
+
+      // Only OPUS postings can actually be worked — an application made on
+      // another company's site is context, not a task.
+      const assigned = everything.filter(
+        (application) => application.applicationType === 'internal'
+      );
 
       const interviews = [];
 
@@ -106,6 +115,9 @@ export default function registerRecruiterRoutes(app) {
           postings: jobs.length,
           activePostings: jobs.filter((job) => job.status === 'open').length,
           myCandidates: candidates.length,
+          // Everything their candidates have applied to, anywhere.
+          totalApplications: everything.length,
+          // The subset a recruiter can actually progress.
           assignedApplications: assigned.length,
           needsAction: assigned.filter((application) =>
             actionableStatuses.includes(application.status)
@@ -339,15 +351,24 @@ export default function registerRecruiterRoutes(app) {
     requireAuth,
     requirePermission('application:assigned:view'),
     async (req, res) => {
-      const assigned = await myApplications(req.user.id, { kind: 'internal' });
+      // Everything their candidates have applied to. Each record keeps its
+      // applicationType so the UI can tell which ones are workable.
+      const all = await myApplications(req.user.id);
 
       const applications = await Promise.all(
-        assigned.map(async (application) =>
+        all.map(async (application) =>
           enrichInternalApplication(await attachInterviews(application))
         )
       );
 
-      return res.json({ applications });
+      return res.json({
+        applications,
+        counts: {
+          total: applications.length,
+          internal: applications.filter((a) => a.applicationType === 'internal').length,
+          external: applications.filter((a) => a.applicationType !== 'internal').length
+        }
+      });
     }
   );
 

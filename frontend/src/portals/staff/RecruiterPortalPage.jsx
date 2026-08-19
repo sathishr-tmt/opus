@@ -641,6 +641,12 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
   /* ---------------- dashboard ---------------- */
 
   if (activePage === 'recruiter-dashboard') {
+    // Charts cover everything the candidates have done, external feeds
+    // included — that is the honest picture of their activity.
+    const workable = applications.filter(
+      (application) => application.applicationType === 'internal'
+    );
+
     const statusCounts = applications.reduce((acc, application) => {
       const status = application.status || 'Applied';
       acc[status] = (acc[status] || 0) + 1;
@@ -727,17 +733,17 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
             onClick={() => setActivePage && setActivePage('recruiter-candidates')}
           />
           <KpiCard
-            label="Assigned applications"
-            value={overview?.counts?.assignedApplications ?? total}
+            label="Applications"
+            value={overview?.counts?.totalApplications ?? total}
             icon={BriefcaseBusiness}
             tone="blue"
             onClick={() => setActivePage && setActivePage('recruiter-applications')}
           />
           <KpiCard
             label="Needs action"
-            value={overview?.counts?.needsAction ?? 0}
+            value={overview?.counts?.needsAction ?? workable.length}
             icon={CheckCircle2}
-            tone={overview?.counts?.needsAction ? 'amber' : 'slate'}
+            tone={(overview?.counts?.needsAction ?? workable.length) ? 'amber' : 'slate'}
             onClick={() => setActivePage && setActivePage('recruiter-applications')}
           />
           <KpiCard
@@ -752,7 +758,10 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
         {/* Charts always render. With nothing to draw they say so, rather than
             vanishing and making the page look broken. */}
         <div className="mb-3.5 grid gap-3.5 lg:grid-cols-2">
-          <Card title="Applications over time" hint="Candidates assigned to you each week">
+          <Card
+            title="Applications over time"
+            hint="Everything your candidates applied to, by week"
+          >
             {total ? (
               <TrendChart
                 categories={buckets.map((bucket) => bucket.label)}
@@ -764,7 +773,10 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
             )}
           </Card>
 
-          <Card title="Candidate status" hint="Current distribution">
+          <Card
+            title="Candidate status"
+            hint="Across every application your candidates have made"
+          >
             {donutData.length ? (
               <StatusDonut data={donutData} height={240} />
             ) : (
@@ -1304,9 +1316,17 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
   /* ---------------- assigned applications ---------------- */
 
   if (activePage === 'recruiter-applications') {
-    const postings = [...new Set(applications.map((a) => a.title).filter(Boolean))].sort();
+    // Only OPUS postings can be progressed. An application made on another
+    // company's site is visible on the candidate's own page, but a recruiter
+    // cannot move it through a pipeline they do not control.
+    const workable = applications.filter(
+      (application) => application.applicationType === 'internal'
+    );
+    const externalCount = applications.length - workable.length;
 
-    const scoped = applications.filter(
+    const postings = [...new Set(workable.map((a) => a.title).filter(Boolean))].sort();
+
+    const scoped = workable.filter(
       (application) => postingFilter === 'all' || application.title === postingFilter
     );
 
@@ -1410,8 +1430,8 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
         <Card
           title={
             boardView === 'board'
-              ? `Pipeline — ${visible.length} of ${applications.length}`
-              : `Showing ${visible.length} of ${applications.length}`
+              ? `Pipeline — ${visible.length} of ${workable.length}`
+              : `Showing ${visible.length} of ${workable.length}`
           }
           hint={
             boardView === 'board'
@@ -1421,8 +1441,16 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
         >
           {loading ? (
             <EmptyState text="Loading candidates..." />
-          ) : !applications.length ? (
-            <EmptyState text="Nothing to work yet. Applications appear here once your candidates apply to a posting." />
+          ) : !workable.length ? (
+            <EmptyState
+              text={
+                externalCount
+                  ? `Nothing to work yet. Your candidates have ${externalCount} application${
+                      externalCount === 1 ? '' : 's'
+                    } elsewhere, but only OPUS postings appear here — see them on each candidate's page.`
+                  : 'Nothing to work yet. Applications appear here once your candidates apply to one of your postings.'
+              }
+            />
           ) : !visible.length ? (
             <EmptyState text="No candidates match this filter." />
           ) : boardView === 'board' ? (
