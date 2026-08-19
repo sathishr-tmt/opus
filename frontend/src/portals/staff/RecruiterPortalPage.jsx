@@ -1441,18 +1441,6 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
         >
           {loading ? (
             <EmptyState text="Loading candidates..." />
-          ) : !workable.length ? (
-            <EmptyState
-              text={
-                externalCount
-                  ? `Nothing to work yet. Your candidates have ${externalCount} application${
-                      externalCount === 1 ? '' : 's'
-                    } elsewhere, but only OPUS postings appear here — see them on each candidate's page.`
-                  : 'Nothing to work yet. Applications appear here once your candidates apply to one of your postings.'
-              }
-            />
-          ) : !visible.length ? (
-            <EmptyState text="No candidates match this filter." />
           ) : boardView === 'board' ? (
             <KanbanBoard
               columns={
@@ -1484,7 +1472,7 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
                 </div>
               )}
             />
-          ) : (
+          ) : visible.length ? (
             visible.map((application) => (
               <CandidateCard
                 key={application.id}
@@ -1494,6 +1482,19 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
                 onSchedule={scheduleInterview}
               />
             ))
+          ) : (
+            <EmptyState text="No candidates match this filter." />
+          )}
+
+          {/* Context that belongs beside the board, not instead of it. */}
+          {!workable.length && (
+            <p className="mt-3 rounded-xl bg-slate-50 px-3.5 py-2.5 text-[12.5px] leading-5 text-slate-500">
+              {externalCount
+                ? `No OPUS applications yet. Your candidates have ${externalCount} application${
+                    externalCount === 1 ? '' : 's'
+                  } with other companies — those appear on each candidate's page, but cannot be moved through this pipeline.`
+                : 'Applications appear here once your candidates apply to one of your postings.'}
+            </p>
           )}
         </Card>
       </section>
