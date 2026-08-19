@@ -22,6 +22,7 @@ import {
 const userNavItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'jobs', label: 'Job Search', icon: Search },
+  { id: 'my-recruiter', label: 'My Recruiter', icon: UserCheck },
   { id: 'applications', label: 'My Applications', icon: ClipboardList },
   { id: 'resumes', label: 'My Resumes', icon: FileText },
   { id: 'calendar', label: 'Calendar', icon: CalendarDays },
@@ -31,6 +32,7 @@ const userNavItems = [
 
 const recruiterNavItems = [
   { id: 'recruiter-dashboard', label: 'Recruiter Dashboard', icon: LayoutDashboard },
+  { id: 'recruiter-candidates', label: 'My Candidates', icon: Users },
   // Creating a posting is an action on this page, not a separate destination.
   { id: 'recruiter-jobs', label: 'My Job Postings', icon: BriefcaseBusiness },
   { id: 'recruiter-applications', label: 'Assigned Applications', icon: ClipboardList },
@@ -129,6 +131,7 @@ function formatMoney(value) {
 export {
   superAdminMenuItems,
   recruiterMenuItems,
+  adminMenuItems,
   navItemsForRole,
   navLabelFor,
   userNavItems,

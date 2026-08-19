@@ -4,7 +4,7 @@
 // enforced on the server; this file simply renders what it is given.
 import { useState, useEffect } from 'react';
 import {
-  BriefcaseBusiness, CheckCircle2, Users, CalendarCheck, ArrowLeft, FileText
+  BriefcaseBusiness, CheckCircle2, Users, CalendarCheck, ArrowLeft, FileText, Link2
 } from 'lucide-react';
 import { apiRequest, API_BASE } from '../../lib/api.js';
 import {
@@ -335,10 +335,14 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
   const [jobForm, setJobForm] = useState({
     title: '', department: '', location: '', workMode: 'Onsite',
     employmentType: 'Full-time', experienceRequirement: '',
-    minSalary: '', maxSalary: '', description: ''
+    minSalary: '', maxSalary: '', description: '',
+    recruiterEmail: '', recruiterPhone: ''
   });
   const [savingJob, setSavingJob] = useState(false);
   const [creatingPosting, setCreatingPosting] = useState(false);
+  const [importUrl, setImportUrl] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importNote, setImportNote] = useState('');
 
   async function loadApplications() {
     const data = await apiRequest('/api/recruiter/applications');
@@ -402,13 +406,64 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
       setJobForm({
         title: '', department: '', location: '', workMode: 'Onsite',
         employmentType: 'Full-time', experienceRequirement: '',
-        minSalary: '', maxSalary: '', description: ''
+        minSalary: '', maxSalary: '', description: '',
+        recruiterEmail: '', recruiterPhone: ''
       });
+      setImportUrl('');
+      setImportNote('');
       showToast('Posting published.');
     } catch (error) {
       showToast(error.message || 'Unable to create job posting.');
     } finally {
       setSavingJob(false);
+    }
+  }
+
+  // Read a public job posting page and fill the form from it. The recruiter
+  // still reviews every field before publishing — extraction is not perfect.
+  async function importFromUrl() {
+    const url = importUrl.trim();
+
+    if (!url) {
+      showToast('Paste a job posting link first.');
+      return;
+    }
+
+    setImporting(true);
+    setImportNote('');
+
+    try {
+      const data = await apiRequest('/api/recruiter/jobs/import-url', {
+        method: 'POST',
+        body: { url }
+      });
+
+      const fields = data.fields || {};
+
+      // Only overwrite fields the page actually provided, so anything already
+      // typed by hand survives.
+      setJobForm((previous) => ({
+        title: fields.title || previous.title,
+        department: fields.department || previous.department,
+        location: fields.location || previous.location,
+        workMode: fields.workMode || previous.workMode,
+        employmentType: fields.employmentType || previous.employmentType,
+        experienceRequirement:
+          fields.experienceRequirement || previous.experienceRequirement,
+        minSalary: fields.minSalary || previous.minSalary,
+        maxSalary: fields.maxSalary || previous.maxSalary,
+        description: fields.description || previous.description,
+        // Contact details are yours, not the page's — never overwritten.
+        recruiterEmail: previous.recruiterEmail,
+        recruiterPhone: previous.recruiterPhone
+      }));
+
+      setImportNote(data.warning || '');
+      showToast(data.message || 'Details read from the link.');
+    } catch (error) {
+      showToast(error.message || 'That link could not be read.');
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -685,6 +740,48 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
         {creatingPosting && (
           <div className="mb-3.5">
             <Card title="Create job posting" className="max-w-2xl">
+              {/* Paste a link and let the page fill itself in. */}
+              <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
+                <p className="mb-2 flex items-center gap-1.5 text-[13px] font-bold text-slate-700">
+                  <Link2 size={14} /> Import from a link
+                </p>
+
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    className={`${inputClass} min-w-[220px] flex-1`}
+                    placeholder="https://company.com/careers/java-developer"
+                    value={importUrl}
+                    onChange={(e) => setImportUrl(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        importFromUrl();
+                      }
+                    }}
+                  />
+                  <button
+                    className={btnPrimaryClass}
+                    disabled={importing}
+                    onClick={importFromUrl}
+                  >
+                    {importing ? 'Reading page...' : 'Fill from link'}
+                  </button>
+                </div>
+
+                <p className="mt-2 text-[11.5px] leading-5 text-slate-500">
+                  Works on company career pages and most job boards. LinkedIn,
+                  Workday and Greenhouse load their pages with JavaScript and
+                  cannot be read this way. Always check the fields before
+                  publishing.
+                </p>
+
+                {importNote && (
+                  <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[12px] font-semibold text-amber-800">
+                    {importNote}
+                  </p>
+                )}
+              </div>
+
               <Field label="Job title">
                 <input className={inputClass} value={jobForm.title} placeholder="Java Developer"
                   onChange={(e) => updateJobForm('title', e.target.value)} />
@@ -729,6 +826,35 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
                   placeholder="Role responsibilities and requirements..."
                   onChange={(e) => updateJobForm('description', e.target.value)} />
               </Field>
+
+              {/* Optional. Candidates see these on the posting so they can
+                  reach you directly. Left blank, your account email is used. */}
+              <p className="mb-2 mt-1 text-[11px] font-bold uppercase text-slate-400">
+                Contact details (optional)
+              </p>
+              <div className="grid gap-3.5 md:grid-cols-2">
+                <Field label="Recruiter email">
+                  <input
+                    className={inputClass}
+                    type="email"
+                    value={jobForm.recruiterEmail}
+                    placeholder={currentUser?.email || 'you@company.com'}
+                    onChange={(e) => updateJobForm('recruiterEmail', e.target.value)}
+                  />
+                </Field>
+                <Field label="Recruiter phone number">
+                  <input
+                    className={inputClass}
+                    value={jobForm.recruiterPhone}
+                    placeholder="+1 (555) 000-0000"
+                    onChange={(e) => updateJobForm('recruiterPhone', e.target.value)}
+                  />
+                </Field>
+              </div>
+              <p className="mb-3.5 text-[11.5px] leading-5 text-slate-500">
+                Shown to candidates on this posting. Leave the email blank and
+                your account address is used.
+              </p>
               <button
                 className={btnPrimaryClass}
                 disabled={savingJob}

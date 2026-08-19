@@ -272,6 +272,11 @@ export default function registerRecruiterRoutes(app) {
         minSalary: Number(req.body.minSalary || 0),
         maxSalary: Number(req.body.maxSalary || 0),
         description: String(req.body.description || '').trim(),
+        // Optional contact details shown to candidates on the posting.
+        // Falls back to the recruiter's account email when left blank.
+        recruiterEmail:
+          String(req.body.recruiterEmail || '').trim() || req.user.email || '',
+        recruiterPhone: String(req.body.recruiterPhone || '').trim(),
         status: 'open',
         createdBy: req.user.id,
         url: ''
@@ -301,7 +306,8 @@ export default function registerRecruiterRoutes(app) {
 
       const allowed = [
         'title', 'department', 'location', 'workMode', 'employmentType',
-        'experienceRequirement', 'minSalary', 'maxSalary', 'description', 'status'
+        'experienceRequirement', 'minSalary', 'maxSalary', 'description', 'status',
+        'recruiterEmail', 'recruiterPhone'
       ];
       const updates = {};
       for (const key of allowed) {

@@ -26,6 +26,8 @@ import registerGmailRoutes from './src/routes/gmail.js';
 import registerDocumentRoutes from './src/routes/documents.js';
 import registerExportRoutes from './src/routes/exports.js';
 import registerSearchRoutes from './src/routes/search.js';
+import registerMyRecruiterRoutes from './src/routes/myRecruiter.js';
+import registerJobImportRoutes from './src/routes/jobImport.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -106,6 +108,8 @@ registerGmailRoutes(app);
 registerDocumentRoutes(app);
 registerExportRoutes(app);
 registerSearchRoutes(app);
+registerJobImportRoutes(app);
+registerMyRecruiterRoutes(app);
 
 app.use(express.static(FRONTEND_DIST));
 

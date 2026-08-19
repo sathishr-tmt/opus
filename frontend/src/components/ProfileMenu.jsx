@@ -1,9 +1,15 @@
-// Top-right profile menu — shown for every role (user, recruiter, admin,
-// super admin). Clicking the avatar opens a small dropdown with the account
-// name/role, a Profile shortcut, Settings, and Sign Out.
+// Top-right profile menu — shown for every role.
+//
+// Each role's occasional pages live here rather than in the sidebar: things
+// you configure once and rarely revisit. The sidebar keeps only what someone
+// opens during normal work.
 import { useState, useEffect, useRef } from 'react';
-import { UserCircle, Settings as SettingsIcon, LogOut, Database, Activity } from 'lucide-react';
-import { formatRoleLabel, superAdminMenuItems, recruiterMenuItems } from '../lib/constants.js';
+import {
+  UserCircle, Settings as SettingsIcon, LogOut, Database, Activity
+} from 'lucide-react';
+import {
+  formatRoleLabel, superAdminMenuItems, recruiterMenuItems, adminMenuItems
+} from '../lib/constants.js';
 
 function initials(name) {
   return String(name || 'U')
@@ -15,15 +21,27 @@ function initials(name) {
     .toUpperCase();
 }
 
-// Per-role menu. Only the USER has an editable Profile (basic info + resume).
-// Staff roles have no separate editable profile, so their menu is just Settings
-// + Sign Out — their name/email/role are fixed at account creation.
-const MENU = {
-  user: { profile: 'profile', settings: 'settings' },
-  recruiter: { settings: 'recruiter-settings' },
-  admin: { settings: 'admin-settings' },
-  super_admin: { settings: 'super-settings' }
-};
+// Job seekers are the only role with an editable Profile page (basic info and
+// resume); for them Settings stays in the sidebar, so the dropdown is short.
+const USER_MENU = [
+  { id: 'profile', label: 'Profile' },
+  { id: 'settings', label: 'Settings' }
+];
+
+function menuItemsFor(role) {
+  if (role === 'super_admin') return superAdminMenuItems;
+  if (role === 'admin') return adminMenuItems;
+  if (role === 'recruiter') return recruiterMenuItems;
+  return USER_MENU;
+}
+
+// Pick an icon that matches what the item actually is.
+function iconFor(id) {
+  if (id.endsWith('-sources')) return Database;
+  if (id.endsWith('-health')) return Activity;
+  if (id === 'profile' || id.endsWith('-profile')) return UserCircle;
+  return SettingsIcon;
+}
 
 function ProfileMenu({ currentUser, setActivePage, onLogout }) {
   const [open, setOpen] = useState(false);
@@ -38,7 +56,7 @@ function ProfileMenu({ currentUser, setActivePage, onLogout }) {
   }, []);
 
   const role = currentUser?.role || 'user';
-  const pages = MENU[role] || MENU.user;
+  const items = menuItemsFor(role);
 
   function go(pageId) {
     setOpen(false);
@@ -54,7 +72,7 @@ function ProfileMenu({ currentUser, setActivePage, onLogout }) {
         <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-sm font-extrabold text-blue-700">
           {initials(currentUser?.name)}
         </div>
-        <span className="text-sm font-bold text-slate-900">
+        <span className="hidden text-sm font-bold text-slate-900 sm:block">
           {currentUser?.name || 'Account'}
         </span>
       </button>
@@ -71,50 +89,23 @@ function ProfileMenu({ currentUser, setActivePage, onLogout }) {
             </span>
           </div>
 
-          {/* Profile appears for job seekers only (editable basic info + resume). */}
-          {pages.profile && (
-            <button
-              onClick={() => go(pages.profile)}
-              className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              <UserCircle size={17} /> Profile
-            </button>
-          )}
+          {items.map((item) => {
+            const Icon = iconFor(item.id);
 
-          {/* Super Admin keeps platform configuration here rather than in the
-              sidebar: visited occasionally, not part of the daily flow. */}
-          {role === 'super_admin' || role === 'recruiter' ? (
-            (role === 'super_admin' ? superAdminMenuItems : recruiterMenuItems).map((item) => {
-              const Icon =
-                item.id === 'super-sources'
-                  ? Database
-                  : item.id === 'super-health'
-                  ? Activity
-                  : item.id === 'recruiter-profile'
-                  ? UserCircle
-                  : SettingsIcon;
-
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => go(item.id)}
-                  className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  <Icon size={17} /> {item.label}
-                </button>
-              );
-            })
-          ) : (
-            <button
-              onClick={() => go(pages.settings)}
-              className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              <SettingsIcon size={17} /> Settings
-            </button>
-          )}
+            return (
+              <button
+                key={item.id}
+                onClick={() => go(item.id)}
+                className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                <Icon size={17} /> {item.label}
+              </button>
+            );
+          })}
 
           <div className="border-t border-slate-100" />
 
+          {/* Sign Out is here as well as at the foot of the sidebar. */}
           <button
             onClick={() => {
               setOpen(false);

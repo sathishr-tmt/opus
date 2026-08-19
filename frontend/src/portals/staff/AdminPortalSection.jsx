@@ -1,9 +1,9 @@
-// Admin portal sections — prototype design: Job Postings, Job Sources,
-// Calendar & Interviews, Reports, and Settings wired to the backend.
+// Admin portal sections — prototype design: Management, Job Postings,
+// Job Sources, Calendar & Interviews, Reports, and Settings.
 import { useState, useEffect } from 'react';
 import { RefreshCw, Download } from 'lucide-react';
 import {
-  PageHeader, Card, StatTile, Pill, ListItem, MonthCalendar, Field,
+  PageHeader, Card, StatTile, Pill, ListItem, MonthCalendar, Field, Tabs,
   inputClass, btnClass, btnSmClass, btnPrimaryClass, EmptyState, ExportMenu
 } from '../../components/ui.jsx';
 import { StatusDonut, BarComparison, HealthGauge } from '../../components/charts.jsx';
@@ -14,6 +14,62 @@ import { AccountPanel } from '../../components/AccountPanel.jsx';
 
 function downloadUrl(path) {
   window.open(`${API_BASE}${path}`, '_blank');
+}
+
+/* ------------------------------------------------------------------ *
+ * Management — one destination for the three "who is in the system and
+ * what are they doing" pages, which used to be three sidebar items.
+ *
+ * Each tab renders the existing page unchanged, so nothing about how
+ * they work has altered — only where you reach them from.
+ * ------------------------------------------------------------------ */
+function AdminManagementPage({ showToast, initialTab = 'users' }) {
+  const [tab, setTab] = useState(initialTab);
+  const [counts, setCounts] = useState({ pending: 0, unassigned: 0 });
+
+  // Small badges on the tabs, so a queue is visible without opening it.
+  useEffect(() => {
+    async function loadCounts() {
+      try {
+        const [usersData, appsData] = await Promise.all([
+          apiRequest('/api/admin/users').catch(() => ({ users: [] })),
+          apiRequest('/api/admin/internal-applications').catch(() => ({ applications: [] }))
+        ]);
+
+        const users = usersData.users || [];
+
+        setCounts({
+          pending: users.filter((user) =>
+            ['pending_admin_approval', 'pending_super_admin_approval'].includes(user.status)
+          ).length,
+          unassigned: (appsData.applications || []).filter(
+            (application) => !application.assignedRecruiterId
+          ).length
+        });
+      } catch {
+        setCounts({ pending: 0, unassigned: 0 });
+      }
+    }
+    loadCounts();
+  }, [tab]);
+
+  return (
+    <section>
+      <Tabs
+        active={tab}
+        onChange={setTab}
+        items={[
+          { key: 'users', label: 'User Management' },
+          { key: 'recruiters', label: 'Recruiter Management', count: counts.pending },
+          { key: 'applications', label: 'Application Management', count: counts.unassigned }
+        ]}
+      />
+
+      {tab === 'users' && <AdminUsersPage showToast={showToast} />}
+      {tab === 'recruiters' && <AdminRecruiterApprovalsPage showToast={showToast} />}
+      {tab === 'applications' && <AdminInternalApplicationsPage showToast={showToast} />}
+    </section>
+  );
 }
 
 function AdminJobPostingsPage({ showToast }) {
@@ -59,9 +115,11 @@ function AdminJobPostingsPage({ showToast }) {
       <Card
         title="All job postings"
         action={
-          <button onClick={() => downloadUrl('/api/exports/admin/job-postings.csv')} className={btnSmClass}>
-            <Download size={12} className="mr-1 inline" /> Export CSV
-          </button>
+          <ExportMenu
+            options={[
+              { label: 'Job postings (CSV)', path: '/api/exports/admin/job-postings.csv' }
+            ]}
+          />
         }
       >
         <p className="mb-3.5 text-[13px] text-slate-500">
@@ -142,7 +200,11 @@ function AdminJobSourcesPage({ showToast }) {
       {total > 0 && (
         <div className="mb-3.5 grid gap-3.5 lg:grid-cols-[1fr_1.6fr]">
           <Card title="Overall source health">
-            <HealthGauge value={healthPct} color={healthPct >= 80 ? '#16a34a' : healthPct >= 50 ? '#d97706' : '#dc2626'} height={190} />
+            <HealthGauge
+              value={healthPct}
+              color={healthPct >= 80 ? '#16a34a' : healthPct >= 50 ? '#d97706' : '#dc2626'}
+              height={190}
+            />
           </Card>
           <div className="grid grid-cols-3 gap-3.5">
             <StatTile label="Enabled" value={total} />
@@ -229,7 +291,18 @@ function AdminInterviewsPage({ showToast }) {
 
   return (
     <section>
-      <PageHeader title="Calendar & Interviews" subtitle="All interviews across recruiters." />
+      <PageHeader
+        title="Calendar & Interviews"
+        subtitle="All interviews across recruiters."
+        action={
+          <ExportMenu
+            label="Export calendar"
+            options={[
+              { label: 'All interviews (calendar file)', path: '/api/exports/admin/interviews.ics' }
+            ]}
+          />
+        }
+      />
       <div className="grid gap-3.5 lg:grid-cols-2">
         <Card>
           <MonthCalendar
@@ -240,14 +313,7 @@ function AdminInterviewsPage({ showToast }) {
             onNext={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1))}
           />
         </Card>
-        <Card
-          title="All interviews"
-          action={
-            <button onClick={() => downloadUrl('/api/exports/admin/interviews.ics')} className={btnSmClass}>
-              <Download size={12} className="mr-1 inline" /> Export .ics
-            </button>
-          }
-        >
+        <Card title="All interviews">
           {loading ? (
             <EmptyState text="Loading interviews..." />
           ) : interviews.length ? (
@@ -383,8 +449,6 @@ function AdminReportsPage({ showToast }) {
 function AdminSettingsPage({ showToast, currentUser, onLogout }) {
   const [settings, setSettings] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '' });
-  const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
     apiRequest('/api/admin/settings')
@@ -405,30 +469,19 @@ function AdminSettingsPage({ showToast, currentUser, onLogout }) {
     }
   }
 
-  async function changePassword() {
-    if (!passwordForm.currentPassword || !passwordForm.newPassword) {
-      showToast('Enter your current and new password.');
-      return;
-    }
-    setChangingPassword(true);
-    try {
-      const data = await apiRequest('/api/account/change-password', {
-        method: 'POST', body: passwordForm
-      });
-      setPasswordForm({ currentPassword: '', newPassword: '' });
-      showToast(data.message || 'Password changed.');
-    } catch (error) {
-      showToast(error.message || 'Unable to change password.');
-    } finally {
-      setChangingPassword(false);
-    }
-  }
-
   return (
     <section>
-      <PageHeader title="Settings" subtitle="Admin profile and security." />
+      <PageHeader
+        title="Admin Settings"
+        subtitle="Platform configuration and your own account."
+      />
+
       {settings ? (
-        <Card title="Platform settings" className="max-w-xl">
+        <Card
+          title="Platform settings"
+          hint="These apply to everyone using OPUS."
+          className="max-w-2xl"
+        >
           <Field label="Platform name">
             <input className={inputClass} value={settings.platformName || ''}
               onChange={(e) => setSettings({ ...settings, platformName: e.target.value })} />
@@ -452,23 +505,10 @@ function AdminSettingsPage({ showToast, currentUser, onLogout }) {
           </button>
         </Card>
       ) : (
-        <Card className="max-w-xl"><EmptyState text="Loading settings..." /></Card>
+        <Card className="max-w-2xl"><EmptyState text="Loading settings..." /></Card>
       )}
-      <Card title="Account & security" className="max-w-xl">
-        <Field label="Current password">
-          <input type="password" className={inputClass} value={passwordForm.currentPassword}
-            placeholder="••••••••"
-            onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })} />
-        </Field>
-        <Field label="New password">
-          <input type="password" className={inputClass} value={passwordForm.newPassword}
-            placeholder="••••••••"
-            onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })} />
-        </Field>
-        <button className={btnPrimaryClass} disabled={changingPassword} onClick={changePassword}>
-          {changingPassword ? 'Changing...' : 'Change password'}
-        </button>
-      </Card>
+
+      {/* Your own account: name, email address, password. */}
       <AccountPanel
         currentUser={currentUser}
         showToast={showToast}
@@ -483,14 +523,28 @@ function AdminPortalSection({ activePage, showToast, setActivePage = () => {}, c
   if (activePage === 'admin-dashboard') {
     return <AdminDashboardPage showToast={showToast} setActivePage={setActivePage} />;
   }
-  if (activePage === 'admin-recruiters') return <AdminRecruiterApprovalsPage showToast={showToast} />;
-  if (activePage === 'admin-users') return <AdminUsersPage showToast={showToast} />;
-  if (activePage === 'admin-applications') return <AdminInternalApplicationsPage showToast={showToast} />;
+
+  // User / Recruiter / Application management are tabs inside Management.
+  // The old page ids still resolve, opening the matching tab, so existing
+  // links and dashboard shortcuts keep working.
+  if (activePage === 'admin-management') {
+    return <AdminManagementPage showToast={showToast} initialTab="users" />;
+  }
+  if (activePage === 'admin-users') {
+    return <AdminManagementPage showToast={showToast} initialTab="users" />;
+  }
+  if (activePage === 'admin-recruiters') {
+    return <AdminManagementPage showToast={showToast} initialTab="recruiters" />;
+  }
+  if (activePage === 'admin-applications') {
+    return <AdminManagementPage showToast={showToast} initialTab="applications" />;
+  }
+
   if (activePage === 'admin-jobs') return <AdminJobPostingsPage showToast={showToast} />;
   if (activePage === 'admin-sources') return <AdminJobSourcesPage showToast={showToast} />;
   if (activePage === 'admin-calendar') return <AdminInterviewsPage showToast={showToast} />;
   if (activePage === 'admin-reports') return <AdminReportsPage showToast={showToast} />;
-  if (activePage === 'admin-settings')
+  if (activePage === 'admin-settings') {
     return (
       <AdminSettingsPage
         showToast={showToast}
@@ -498,6 +552,7 @@ function AdminPortalSection({ activePage, showToast, setActivePage = () => {}, c
         onLogout={onLogout}
       />
     );
+  }
 
   return (
     <section>

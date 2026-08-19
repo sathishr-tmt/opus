@@ -21,6 +21,7 @@ import { CalendarPage } from './portals/user/CalendarPage.jsx';
 import { SettingsPage } from './portals/user/SettingsPage.jsx';
 import { MyApplicationsPage } from './portals/user/MyApplicationsPage.jsx';
 import { MyResumesPage } from './portals/user/MyResumesPage.jsx';
+import { RecruiterJobsPage } from './portals/user/RecruiterJobsPage.jsx';
 import { ProfileResumePage } from './portals/user/ProfileResumePage.jsx';
 import { RecruiterRegisterPage } from './portals/staff/RecruiterRegisterPage.jsx';
 import { RecruiterPortalPage } from './portals/staff/RecruiterPortalPage.jsx';
@@ -558,7 +559,12 @@ function App() {
                   showToast={showToast}
                 />
               )}
-
+              {activePage === 'my-recruiter' && (
+                <RecruiterJobsPage
+                  showToast={showToast}
+                  onDashboardChange={loadDashboard}
+                />
+              )}
               {activePage === 'applications' && (
                 <MyApplicationsPage
                   dashboard={dashboard}
