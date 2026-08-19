@@ -1,6 +1,7 @@
 // Recruiter portal — rebuilt to match the OPUS Recruiter Portal prototype,
 // wired to the existing backend (/api/recruiter/*, /api/account/*).
 import { useState, useEffect } from 'react';
+import { BriefcaseBusiness, CheckCircle2, Users, CalendarCheck } from 'lucide-react';
 import { apiRequest, API_BASE } from '../../lib/api.js';
 import {
   PageHeader, Card, StatTile, Pill, ListItem, Field, MonthCalendar,
