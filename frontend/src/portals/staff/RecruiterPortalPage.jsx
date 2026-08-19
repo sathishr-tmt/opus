@@ -1,7 +1,11 @@
-// Recruiter portal — rebuilt to match the OPUS Recruiter Portal prototype,
-// wired to the existing backend (/api/recruiter/*, /api/account/*).
+// Recruiter portal — wired to /api/recruiter/* and /api/account/*.
+//
+// A recruiter sees only the candidates an admin assigned to them. That is
+// enforced on the server; this file simply renders what it is given.
 import { useState, useEffect } from 'react';
-import { BriefcaseBusiness, CheckCircle2, Users, CalendarCheck } from 'lucide-react';
+import {
+  BriefcaseBusiness, CheckCircle2, Users, CalendarCheck, ArrowLeft, FileText
+} from 'lucide-react';
 import { apiRequest, API_BASE } from '../../lib/api.js';
 import {
   PageHeader, Card, StatTile, Pill, ListItem, Field, MonthCalendar,
@@ -36,6 +40,10 @@ function activeInterview(application) {
   );
 }
 
+function download(documentId) {
+  window.open(`${API_BASE}/api/documents/${documentId}/download`, '_blank');
+}
+
 function CandidateCard({ application, onStatus, onNotes, onSchedule }) {
   const [note, setNote] = useState(application.recruiterNotes || '');
   const [scheduling, setScheduling] = useState(false);
@@ -58,12 +66,7 @@ function CandidateCard({ application, onStatus, onNotes, onSchedule }) {
           {application.candidate?.resumeDocumentId && (
             <button
               className={btnSmClass}
-              onClick={() =>
-                window.open(
-                  `${API_BASE}/api/documents/${application.candidate.resumeDocumentId}/download`,
-                  '_blank'
-                )
-              }
+              onClick={() => download(application.candidate.resumeDocumentId)}
             >
               Resume
             </button>
@@ -129,10 +132,200 @@ function CandidateCard({ application, onStatus, onNotes, onSchedule }) {
   );
 }
 
+/* ------------------------------------------------------------------ *
+ * One candidate in full: profile, resumes, applications, interviews.
+ * ------------------------------------------------------------------ */
+function CandidateDetail({ userId, showToast, onBack }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      try {
+        const result = await apiRequest(`/api/recruiter/candidates/${userId}`);
+        setData(result);
+      } catch (error) {
+        showToast(error.message || 'Unable to load this candidate.');
+        setData(null);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [userId]);
+
+  if (loading) {
+    return (
+      <Card title="Candidate">
+        <EmptyState text="Loading candidate..." />
+      </Card>
+    );
+  }
+
+  if (!data) {
+    return (
+      <Card title="Candidate">
+        <EmptyState text="This candidate is not assigned to you." />
+        <button className={`${btnClass} mt-3`} onClick={onBack}>
+          Back to my candidates
+        </button>
+      </Card>
+    );
+  }
+
+  const { candidate, documents = [], applications = [], interviews = [] } = data;
+  const skills = String(candidate.skills || '')
+    .split(/[,;|\n]/)
+    .map((skill) => skill.trim())
+    .filter(Boolean);
+
+  return (
+    <>
+      <button className={`${btnClass} mb-3.5`} onClick={onBack}>
+        <span className="inline-flex items-center gap-1.5">
+          <ArrowLeft size={14} /> My candidates
+        </span>
+      </button>
+
+      <Card title={candidate.name} hint={candidate.email}>
+        <div className="grid gap-3.5 md:grid-cols-2">
+          <div>
+            <p className="text-[11px] font-bold uppercase text-slate-400">Title</p>
+            <p className="text-[13px] font-bold text-slate-900">
+              {candidate.professionalTitle || 'Not provided'}
+            </p>
+          </div>
+          <div>
+            <p className="text-[11px] font-bold uppercase text-slate-400">Experience</p>
+            <p className="text-[13px] font-bold text-slate-900">
+              {candidate.experienceYears ? `${candidate.experienceYears} years` : 'Not provided'}
+            </p>
+          </div>
+          <div>
+            <p className="text-[11px] font-bold uppercase text-slate-400">Location</p>
+            <p className="text-[13px] text-slate-700">{candidate.location || 'Not provided'}</p>
+          </div>
+          <div>
+            <p className="text-[11px] font-bold uppercase text-slate-400">Work authorization</p>
+            <p className="text-[13px] text-slate-700">
+              {candidate.workAuthorization || 'Not provided'}
+            </p>
+          </div>
+        </div>
+
+        {skills.length > 0 && (
+          <div className="mt-3.5">
+            <p className="mb-1.5 text-[11px] font-bold uppercase text-slate-400">Skills</p>
+            <div className="flex flex-wrap gap-1.5">
+              {skills.map((skill) => (
+                <span
+                  key={skill}
+                  className="rounded-full bg-violet-50 px-2.5 py-1 text-[11.5px] font-semibold text-violet-700"
+                >
+                  {skill}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {candidate.about && (
+          <div className="mt-3.5">
+            <p className="mb-1 text-[11px] font-bold uppercase text-slate-400">Summary</p>
+            <p className="text-[13px] leading-6 text-slate-600">{candidate.about}</p>
+          </div>
+        )}
+      </Card>
+
+      <Card title="Resumes" hint="Base resume plus any versions tailored to a specific job.">
+        {documents.length ? (
+          documents.map((document) => (
+            <ListItem
+              key={document.id}
+              title={document.originalName}
+              meta={
+                document.kind === 'tailored'
+                  ? [
+                      document.matchScore != null ? `${document.matchScore}% match` : null,
+                      document.jobTitle,
+                      document.company ? `@ ${document.company}` : null
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')
+                  : 'Base resume'
+              }
+              right={
+                <>
+                  {document.matchScore != null && (
+                    <Pill tone={document.matchScore >= 65 ? 'green' : 'amber'}>
+                      {document.matchScore}%
+                    </Pill>
+                  )}
+                  <button className={btnSmClass} onClick={() => download(document.id)}>
+                    <span className="inline-flex items-center gap-1.5">
+                      <FileText size={12} /> Download
+                    </span>
+                  </button>
+                </>
+              }
+            />
+          ))
+        ) : (
+          <EmptyState text="This candidate has not uploaded a resume yet." />
+        )}
+      </Card>
+
+      <Card title="Applications" hint="Everything this person has applied to.">
+        {applications.length ? (
+          applications.map((application) => (
+            <ListItem
+              key={application.id}
+              title={application.title || 'Application'}
+              meta={[
+                application.company,
+                application.appliedAt
+                  ? new Date(application.appliedAt).toLocaleDateString()
+                  : null
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+              right={<Pill>{application.status}</Pill>}
+            />
+          ))
+        ) : (
+          <EmptyState text="No applications yet." />
+        )}
+      </Card>
+
+      <Card title="Interviews">
+        {interviews.length ? (
+          interviews.map((interview) => (
+            <ListItem
+              key={interview.id}
+              title={formatWhen(interview.startsAt)}
+              meta={[interview.mode, interview.location].filter(Boolean).join(' · ')}
+              right={
+                <Pill tone={interview.status === 'cancelled' ? 'red' : 'violet'}>
+                  {interview.status}
+                </Pill>
+              }
+            />
+          ))
+        ) : (
+          <EmptyState text="No interviews scheduled." />
+        )}
+      </Card>
+    </>
+  );
+}
+
 function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage, onLogout }) {
   const [overview, setOverview] = useState(null);
   const [jobs, setJobs] = useState([]);
   const [applications, setApplications] = useState([]);
+  const [candidates, setCandidates] = useState([]);
+  const [openCandidateId, setOpenCandidateId] = useState('');
   const [loading, setLoading] = useState(false);
   const [monthDate, setMonthDate] = useState(() => {
     const now = new Date();
@@ -146,9 +339,6 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
   });
   const [savingJob, setSavingJob] = useState(false);
   const [creatingPosting, setCreatingPosting] = useState(false);
-
-  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '' });
-  const [changingPassword, setChangingPassword] = useState(false);
 
   async function loadApplications() {
     const data = await apiRequest('/api/recruiter/applications');
@@ -165,13 +355,20 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
     setOverview(data);
   }
 
+  async function loadCandidates() {
+    const data = await apiRequest('/api/recruiter/candidates');
+    setCandidates(data.candidates || []);
+  }
+
   useEffect(() => {
     async function load() {
       setLoading(true);
       try {
         if (activePage === 'recruiter-dashboard') {
-          await Promise.all([loadOverview(), loadApplications()]);
-        } else if (activePage === 'recruiter-jobs') {
+          await Promise.all([loadOverview(), loadApplications(), loadCandidates()]);
+        } else if (activePage === 'recruiter-candidates') {
+          await loadCandidates();
+        } else if (activePage === 'recruiter-jobs' || activePage === 'recruiter-create-job') {
           await loadJobs();
         } else if (activePage === 'recruiter-applications' || activePage === 'recruiter-calendar') {
           await loadApplications();
@@ -185,11 +382,16 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
     load();
   }, [activePage, currentUser?.id]);
 
+  // Leaving the candidates page closes any open detail view.
+  useEffect(() => {
+    if (activePage !== 'recruiter-candidates') setOpenCandidateId('');
+  }, [activePage]);
+
   function updateJobForm(name, value) {
     setJobForm((previous) => ({ ...previous, [name]: value }));
   }
 
-  async function saveJobPosting(goToPostings) {
+  async function saveJobPosting() {
     if (!jobForm.title.trim() || !jobForm.location.trim()) {
       showToast('Job title and location are required.');
       return;
@@ -203,7 +405,6 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
         minSalary: '', maxSalary: '', description: ''
       });
       showToast('Posting published.');
-      if (goToPostings) goToPostings();
     } catch (error) {
       showToast(error.message || 'Unable to create job posting.');
     } finally {
@@ -257,31 +458,13 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
     }
   }
 
-  async function changePassword() {
-    if (!passwordForm.currentPassword || !passwordForm.newPassword) {
-      showToast('Enter your current and new password.');
-      return;
-    }
-    setChangingPassword(true);
-    try {
-      const data = await apiRequest('/api/account/change-password', {
-        method: 'POST', body: passwordForm
-      });
-      setPasswordForm({ currentPassword: '', newPassword: '' });
-      showToast(data.message || 'Password changed.');
-    } catch (error) {
-      showToast(error.message || 'Unable to change password.');
-    } finally {
-      setChangingPassword(false);
-    }
-  }
-
   const interviews = applications
     .map((application) => ({ application, interview: activeInterview(application) }))
     .filter((entry) => entry.interview);
 
+  /* ---------------- dashboard ---------------- */
+
   if (activePage === 'recruiter-dashboard') {
-    // Build the status donut and recruitment funnel from real applications.
     const statusCounts = applications.reduce((acc, application) => {
       const status = application.status || 'Applied';
       acc[status] = (acc[status] || 0) + 1;
@@ -293,7 +476,7 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
     const reached = (minIndex) =>
       applications.filter((a) => (STATUS_ORDER[a.status] ?? -1) >= minIndex).length;
     const funnelData = [
-      { name: 'Assigned', value: total },
+      { name: 'Applied', value: total },
       { name: 'Reviewed', value: reached(1) },
       { name: 'Assessment', value: reached(2) },
       { name: 'Interview', value: reached(3) },
@@ -302,69 +485,184 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
 
     return (
       <section>
-        <PageHeader title="Dashboard" subtitle="Your postings and assigned candidates." />
+        <PageHeader title="Dashboard" subtitle="Your candidates, postings and interviews." />
         <div className="mb-4 grid gap-3.5 md:grid-cols-4">
           {/* Each card opens the page it summarises. */}
           <KpiCard
-            label="My postings"
-            value={overview?.counts?.postings ?? 0}
+            label="My candidates"
+            value={overview?.counts?.myCandidates ?? candidates.length}
+            icon={Users}
+            tone="violet"
+            onClick={() => setActivePage && setActivePage('recruiter-candidates')}
+          />
+          <KpiCard
+            label="Needs action"
+            value={overview?.counts?.needsAction ?? 0}
+            icon={CheckCircle2}
+            tone={overview?.counts?.needsAction ? 'amber' : 'slate'}
+            onClick={() => setActivePage && setActivePage('recruiter-applications')}
+          />
+          <KpiCard
+            label="Active postings"
+            value={overview?.counts?.activePostings ?? 0}
             icon={BriefcaseBusiness}
             tone="blue"
             onClick={() => setActivePage && setActivePage('recruiter-jobs')}
           />
           <KpiCard
-            label="Active postings"
-            value={overview?.counts?.activePostings ?? 0}
-            icon={CheckCircle2}
-            tone="green"
-            onClick={() => setActivePage && setActivePage('recruiter-jobs')}
-          />
-          <KpiCard
-            label="Assigned candidates"
-            value={overview?.counts?.assignedApplications ?? applications.length}
-            icon={Users}
-            tone="violet"
-            onClick={() => setActivePage && setActivePage('recruiter-applications')}
-          />
-          <KpiCard
-            label="Interviews"
+            label="Upcoming interviews"
             value={overview?.counts?.upcomingInterviews ?? interviews.length}
             icon={CalendarCheck}
-            tone="amber"
+            tone="teal"
             onClick={() => setActivePage && setActivePage('recruiter-calendar')}
           />
         </div>
 
         {total > 0 && (
           <div className="mb-4 grid gap-3.5 lg:grid-cols-2">
-            <Card title="Candidate status">
+            <Card title="Candidate status" hint="Where your candidates sit right now">
               <StatusDonut data={donutData} height={240} />
             </Card>
-            <Card title="Recruitment funnel">
+            <Card
+              title="Recruitment funnel"
+              hint="Each stage counts everyone who reached at least that far"
+            >
               <RecruitmentFunnel data={funnelData} height={240} />
             </Card>
           </div>
         )}
 
-        <Card title="Assigned candidates">
+        <Card
+          title="My candidates"
+          action={
+            <button
+              className="text-[13px] font-bold text-violet-700"
+              onClick={() => setActivePage && setActivePage('recruiter-candidates')}
+            >
+              View all &rarr;
+            </button>
+          }
+        >
           {loading ? (
             <EmptyState text="Loading..." />
-          ) : applications.length ? (
-            applications.slice(0, 4).map((application) => (
+          ) : candidates.length ? (
+            candidates.slice(0, 5).map((candidate) => (
               <ListItem
-                key={application.id}
-                title={application.candidate?.name || 'Candidate'}
-                meta={application.title}
-                right={<Pill>{application.status}</Pill>}
+                key={candidate.id}
+                title={candidate.name}
+                meta={[candidate.professionalTitle, candidate.location]
+                  .filter(Boolean)
+                  .join(' · ') || candidate.email}
+                right={
+                  <Pill tone={candidate.activeApplicationCount ? 'violet' : 'slate'}>
+                    {candidate.activeApplicationCount} active
+                  </Pill>
+                }
               />
             ))
           ) : (
-            <EmptyState text="No candidates assigned yet. An admin assigns applications to you." />
+            <EmptyState text="No candidates assigned yet. An admin assigns candidates to you." />
           )}
         </Card>
       </section>
     );
   }
+
+  /* ---------------- my candidates ---------------- */
+
+  if (activePage === 'recruiter-candidates') {
+    if (openCandidateId) {
+      return (
+        <section>
+          <PageHeader title="Candidate" subtitle="Profile, resumes, applications and interviews." />
+          <CandidateDetail
+            userId={openCandidateId}
+            showToast={showToast}
+            onBack={() => setOpenCandidateId('')}
+          />
+        </section>
+      );
+    }
+
+    return (
+      <section>
+        <PageHeader
+          title="My Candidates"
+          subtitle="The people an admin assigned to you."
+          action={
+            <ExportMenu
+              options={[
+                {
+                  label: 'Assigned candidates (CSV)',
+                  path: '/api/exports/recruiter/assigned-applications.csv'
+                }
+              ]}
+            />
+          }
+        />
+
+        <Card
+          title={`${candidates.length} candidate${candidates.length === 1 ? '' : 's'}`}
+          hint="Click a candidate to see their full profile, resumes and history."
+        >
+          {loading ? (
+            <EmptyState text="Loading candidates..." />
+          ) : candidates.length ? (
+            candidates.map((candidate) => (
+              <div
+                key={candidate.id}
+                onClick={() => setOpenCandidateId(candidate.id)}
+                className="mb-2 cursor-pointer rounded-xl border border-slate-200 bg-slate-50 p-3.5 transition hover:border-violet-300 hover:bg-white"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-slate-900">{candidate.name}</p>
+                    <p className="mt-0.5 truncate text-xs text-slate-500">
+                      {[candidate.professionalTitle, candidate.location, candidate.email]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </p>
+                  </div>
+
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    {candidate.resumeDocumentId && (
+                      <button
+                        className={btnSmClass}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          download(candidate.resumeDocumentId);
+                        }}
+                      >
+                        Resume
+                      </button>
+                    )}
+                    <Pill tone="slate">{candidate.applicationCount} applications</Pill>
+                    <Pill tone={candidate.activeApplicationCount ? 'violet' : 'slate'}>
+                      {candidate.activeApplicationCount} active
+                    </Pill>
+                  </div>
+                </div>
+
+                {candidate.latestApplication && (
+                  <p className="mt-2 text-[11.5px] text-slate-400">
+                    Latest: {candidate.latestApplication.title}
+                    {candidate.latestApplication.company
+                      ? ` @ ${candidate.latestApplication.company}`
+                      : ''}{' '}
+                    — {candidate.latestApplication.status}
+                  </p>
+                )}
+              </div>
+            ))
+          ) : (
+            <EmptyState text="No candidates assigned to you yet. An admin assigns them in User Management." />
+          )}
+        </Card>
+      </section>
+    );
+  }
+
+  /* ---------------- job postings ---------------- */
 
   if (activePage === 'recruiter-jobs' || activePage === 'recruiter-create-job') {
     return (
@@ -387,62 +685,62 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
         {creatingPosting && (
           <div className="mb-3.5">
             <Card title="Create job posting" className="max-w-2xl">
-          <Field label="Job title">
-            <input className={inputClass} value={jobForm.title} placeholder="Java Developer"
-              onChange={(e) => updateJobForm('title', e.target.value)} />
-          </Field>
-          <div className="grid gap-3.5 md:grid-cols-2">
-            <Field label="Location">
-              <input className={inputClass} value={jobForm.location} placeholder="Dallas, TX"
-                onChange={(e) => updateJobForm('location', e.target.value)} />
-            </Field>
-            <Field label="Work mode">
-              <select className={inputClass} value={jobForm.workMode}
-                onChange={(e) => updateJobForm('workMode', e.target.value)}>
-                <option>Onsite</option><option>Remote</option><option>Hybrid</option>
-              </select>
-            </Field>
-            <Field label="Employment type">
-              <select className={inputClass} value={jobForm.employmentType}
-                onChange={(e) => updateJobForm('employmentType', e.target.value)}>
-                <option>Full-time</option><option>Part-time</option>
-                <option>Contract</option><option>Internship</option>
-              </select>
-            </Field>
-            <Field label="Department">
-              <input className={inputClass} value={jobForm.department} placeholder="Engineering"
-                onChange={(e) => updateJobForm('department', e.target.value)} />
-            </Field>
-            <Field label="Minimum salary">
-              <input className={inputClass} type="number" value={jobForm.minSalary} placeholder="120000"
-                onChange={(e) => updateJobForm('minSalary', e.target.value)} />
-            </Field>
-            <Field label="Maximum salary">
-              <input className={inputClass} type="number" value={jobForm.maxSalary} placeholder="150000"
-                onChange={(e) => updateJobForm('maxSalary', e.target.value)} />
-            </Field>
-          </div>
-          <Field label="Experience requirement">
-            <input className={inputClass} value={jobForm.experienceRequirement} placeholder="Example: 3–5 years"
-              onChange={(e) => updateJobForm('experienceRequirement', e.target.value)} />
-          </Field>
-          <Field label="Description">
-            <textarea rows={4} className={inputClass} value={jobForm.description}
-              placeholder="Role responsibilities and requirements..."
-              onChange={(e) => updateJobForm('description', e.target.value)} />
-          </Field>
-          <button
-            className={btnPrimaryClass}
-            disabled={savingJob}
-            onClick={async () => {
-              await saveJobPosting();
-              setCreatingPosting(false);
-              await loadJobs();
-            }}
-          >
-            {savingJob ? 'Publishing...' : 'Publish posting'}
-          </button>
-        </Card>
+              <Field label="Job title">
+                <input className={inputClass} value={jobForm.title} placeholder="Java Developer"
+                  onChange={(e) => updateJobForm('title', e.target.value)} />
+              </Field>
+              <div className="grid gap-3.5 md:grid-cols-2">
+                <Field label="Location">
+                  <input className={inputClass} value={jobForm.location} placeholder="Dallas, TX"
+                    onChange={(e) => updateJobForm('location', e.target.value)} />
+                </Field>
+                <Field label="Work mode">
+                  <select className={inputClass} value={jobForm.workMode}
+                    onChange={(e) => updateJobForm('workMode', e.target.value)}>
+                    <option>Onsite</option><option>Remote</option><option>Hybrid</option>
+                  </select>
+                </Field>
+                <Field label="Employment type">
+                  <select className={inputClass} value={jobForm.employmentType}
+                    onChange={(e) => updateJobForm('employmentType', e.target.value)}>
+                    <option>Full-time</option><option>Part-time</option>
+                    <option>Contract</option><option>Internship</option>
+                  </select>
+                </Field>
+                <Field label="Department">
+                  <input className={inputClass} value={jobForm.department} placeholder="Engineering"
+                    onChange={(e) => updateJobForm('department', e.target.value)} />
+                </Field>
+                <Field label="Minimum salary">
+                  <input className={inputClass} type="number" value={jobForm.minSalary} placeholder="120000"
+                    onChange={(e) => updateJobForm('minSalary', e.target.value)} />
+                </Field>
+                <Field label="Maximum salary">
+                  <input className={inputClass} type="number" value={jobForm.maxSalary} placeholder="150000"
+                    onChange={(e) => updateJobForm('maxSalary', e.target.value)} />
+                </Field>
+              </div>
+              <Field label="Experience requirement">
+                <input className={inputClass} value={jobForm.experienceRequirement} placeholder="Example: 3–5 years"
+                  onChange={(e) => updateJobForm('experienceRequirement', e.target.value)} />
+              </Field>
+              <Field label="Description">
+                <textarea rows={4} className={inputClass} value={jobForm.description}
+                  placeholder="Role responsibilities and requirements..."
+                  onChange={(e) => updateJobForm('description', e.target.value)} />
+              </Field>
+              <button
+                className={btnPrimaryClass}
+                disabled={savingJob}
+                onClick={async () => {
+                  await saveJobPosting();
+                  setCreatingPosting(false);
+                  await loadJobs();
+                }}
+              >
+                {savingJob ? 'Publishing...' : 'Publish posting'}
+              </button>
+            </Card>
           </div>
         )}
 
@@ -473,6 +771,7 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
     );
   }
 
+  /* ---------------- assigned applications ---------------- */
 
   if (activePage === 'recruiter-applications') {
     return (
@@ -497,7 +796,8 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
         />
         <Card title="Assigned applications">
           <p className="mb-3.5 text-[13px] text-slate-500">
-            Update status, add notes, and schedule interviews for candidates an admin assigned to you.
+            Update status, add notes, and schedule interviews for the candidates
+            assigned to you.
           </p>
           {loading ? (
             <EmptyState text="Loading candidates..." />
@@ -512,12 +812,14 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
               />
             ))
           ) : (
-            <EmptyState text="No candidates assigned yet." />
+            <EmptyState text="Nothing to work yet. Applications appear here once your candidates apply to a posting." />
           )}
         </Card>
       </section>
     );
   }
+
+  /* ---------------- interview calendar ---------------- */
 
   if (activePage === 'recruiter-calendar') {
     const markedDays = interviews
@@ -574,6 +876,8 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
       </section>
     );
   }
+
+  /* ---------------- profile / settings ---------------- */
 
   if (activePage === 'recruiter-profile' || activePage === 'recruiter-settings') {
     return (

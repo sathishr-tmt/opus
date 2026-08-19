@@ -41,6 +41,9 @@ const userSchema = createSchema(
     experienceYears: { type: Number, default: null },
     company: { type: String, default: null },
     department: { type: String, default: null },
+    // Set by an admin: which recruiter looks after this candidate.
+    // null means nobody is assigned yet. Only meaningful on role 'user'.
+    assignedRecruiterId: { type: String, default: null },
     sessionVersion: { type: Number, required: true, default: 1 },
     emailVerificationTokenHash: { type: String, default: null },
     emailVerificationExpiresAt: { type: Date, default: null },
@@ -61,6 +64,8 @@ const userSchema = createSchema(
 userSchema.index({ email: 1 }, { unique: true });
 userSchema.index({ role: 1 });
 userSchema.index({ status: 1 });
+// Recruiters read their candidate list by this field on every request.
+userSchema.index({ assignedRecruiterId: 1 });
 
 const adminInvitationSchema = createSchema(
   {

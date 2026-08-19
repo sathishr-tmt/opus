@@ -45,16 +45,19 @@ const recruiterMenuItems = [
 
 const adminNavItems = [
   { id: 'admin-dashboard', label: 'Admin Dashboard', icon: LayoutDashboard },
-  { id: 'admin-users', label: 'User Management', icon: Users },
-  { id: 'admin-recruiters', label: 'Recruiter Management', icon: ShieldCheck },
+  // User, Recruiter and Application management are tabs inside one page —
+  // they are all "who is in the system and what are they doing".
+  { id: 'admin-management', label: 'Management', icon: Users },
   { id: 'admin-jobs', label: 'Job Postings', icon: BriefcaseBusiness },
-  { id: 'admin-applications', label: 'Application Management', icon: ClipboardList },
-  { id: 'admin-sources', label: 'Job Sources', icon: Database },
   { id: 'admin-calendar', label: 'Calendar & Interviews', icon: CalendarCheck },
-  { id: 'admin-reports', label: 'Reports', icon: BarChart3 },
-  { id: 'admin-settings', label: 'Admin Settings', icon: Settings }
+  { id: 'admin-reports', label: 'Reports', icon: BarChart3 }
 ];
 
+// Shown in the top-right name dropdown rather than the sidebar.
+const adminMenuItems = [
+  { id: 'admin-sources', label: 'Job Sources' },
+  { id: 'admin-settings', label: 'Admin Settings' }
+];
 const superAdminNavItems = [
   { id: 'super-dashboard', label: 'Dashboard', icon: LayoutDashboard },
   // Approvals, Admin Invitations and Account Oversight are tabs inside this
@@ -82,7 +85,7 @@ function navItemsForRole(role) {
 
 function navLabelFor(role, pageId) {
   if (pageId === 'help') return 'Help & Support';
-  const fromMenu = [...superAdminMenuItems, ...recruiterMenuItems].find(
+  const fromMenu = [...superAdminMenuItems, ...recruiterMenuItems, ...adminMenuItems].find(
     (entry) => entry.id === pageId
   );
   if (fromMenu) return fromMenu.label;

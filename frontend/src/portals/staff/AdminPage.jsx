@@ -1,11 +1,11 @@
 // Admin portal core pages — rebuilt to match the OPUS Admin Portal prototype:
 // Dashboard (platform overview), Recruiter Approvals, and User Management.
 import { useState, useEffect } from 'react';
-import { ShieldCheck, UserCheck, BriefcaseBusiness, ClipboardList } from 'lucide-react';
+import { ShieldCheck, UserCheck, BriefcaseBusiness, ClipboardList, UserPlus } from 'lucide-react';
 import { apiRequest } from '../../lib/api.js';
 import {
   PageHeader, Card, StatTile, Pill, ListItem, DataTable,
-  inputClass, btnSmClass, EmptyState, KpiCard
+  inputClass, btnSmClass, EmptyState, KpiCard, ConfirmModal
 } from '../../components/ui.jsx';
 import {
   StatusDonut, BarComparison, TrendChart, RecruitmentFunnel, ActivityHeatmap
@@ -29,21 +29,24 @@ function AdminDashboardPage({ showToast, setActivePage }) {
   const [overview, setOverview] = useState(null);
   const [pending, setPending] = useState([]);
   const [applications, setApplications] = useState([]);
+  const [candidates, setCandidates] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       try {
-        const [overviewData, pendingData, appsData, analyticsData] = await Promise.all([
+        const [overviewData, pendingData, appsData, usersData, analyticsData] = await Promise.all([
           apiRequest('/api/admin/overview'),
-          apiRequest('/api/admin/pending-approvals'),
+          apiRequest('/api/admin/pending-approvals').catch(() => ({ users: [] })),
           apiRequest('/api/admin/internal-applications'),
+          apiRequest('/api/admin/users'),
           apiRequest('/api/admin/analytics').catch(() => null)
         ]);
         setOverview(overviewData);
         setPending((pendingData.users || []).filter((u) => u.role === 'recruiter'));
         setApplications(appsData.applications || []);
+        setCandidates((usersData.users || []).filter((u) => u.role === 'user'));
         setAnalytics(analyticsData);
       } catch (error) {
         showToast(error.message || 'Failed to load admin dashboard.');
@@ -54,7 +57,10 @@ function AdminDashboardPage({ showToast, setActivePage }) {
     load();
   }, []);
 
-  const unassigned = applications.filter((a) => !a.assignedRecruiterId);
+  // Job seekers nobody is looking after yet — the queue an admin works through.
+  const unassignedCandidates = candidates.filter(
+    (candidate) => !candidate.assignedRecruiterId
+  );
 
   // Accounts by role donut, from the real role breakdown.
   const usersByRole = overview?.usersByRole || {};
@@ -84,11 +90,11 @@ function AdminDashboardPage({ showToast, setActivePage }) {
           onClick={() => setActivePage('admin-recruiters')}
         />
         <KpiCard
-          label="Pending approvals"
-          value={pending.length}
-          icon={UserCheck}
-          tone={pending.length ? 'amber' : 'slate'}
-          onClick={() => setActivePage('admin-recruiters')}
+          label="Candidates without a recruiter"
+          value={unassignedCandidates.length}
+          icon={UserPlus}
+          tone={unassignedCandidates.length ? 'amber' : 'slate'}
+          onClick={() => setActivePage('admin-users')}
         />
         <KpiCard
           label="Job postings"
@@ -228,12 +234,14 @@ function AdminDashboardPage({ showToast, setActivePage }) {
             <EmptyState text="No recruiters awaiting approval." />
           )}
         </Card>
+
         <Card
-          title="Unassigned applications"
+          title="Candidates without a recruiter"
+          hint="Assign these people so a recruiter can start working with them."
           action={
             <button
               className="text-[13px] font-bold text-violet-700"
-              onClick={() => setActivePage('admin-applications')}
+              onClick={() => setActivePage('admin-users')}
             >
               Assign &rarr;
             </button>
@@ -241,17 +249,17 @@ function AdminDashboardPage({ showToast, setActivePage }) {
         >
           {loading ? (
             <EmptyState text="Loading..." />
-          ) : unassigned.length ? (
-            unassigned.map((application) => (
+          ) : unassignedCandidates.length ? (
+            unassignedCandidates.slice(0, 8).map((candidate) => (
               <ListItem
-                key={application.id}
-                title={application.candidate?.name || 'Candidate'}
-                meta={application.title}
+                key={candidate.id}
+                title={candidate.name}
+                meta={candidate.email}
                 right={<Pill tone="amber">unassigned</Pill>}
               />
             ))
           ) : (
-            <EmptyState text="All applications are assigned." />
+            <EmptyState text="Every candidate has a recruiter." />
           )}
         </Card>
       </div>
@@ -268,7 +276,7 @@ function AdminRecruiterApprovalsPage({ showToast }) {
     try {
       const [usersData, pendingData] = await Promise.all([
         apiRequest('/api/admin/users'),
-        apiRequest('/api/admin/pending-approvals')
+        apiRequest('/api/admin/pending-approvals').catch(() => ({ users: [] }))
       ]);
       const fromUsers = (usersData.users || []).filter((u) => u.role === 'recruiter');
       const fromPending = (pendingData.users || []).filter((u) => u.role === 'recruiter');
@@ -358,13 +366,18 @@ function AdminRecruiterApprovalsPage({ showToast }) {
 
 function AdminUsersPage({ showToast }) {
   const [users, setUsers] = useState([]);
+  const [recruiters, setRecruiters] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [savingId, setSavingId] = useState('');
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [filter, setFilter] = useState('all');
 
   async function load() {
     setLoading(true);
     try {
       const data = await apiRequest('/api/admin/users');
       setUsers(data.users || []);
+      setRecruiters(data.recruiters || []);
     } catch (error) {
       showToast(error.message || 'Failed to load users.');
     } finally {
@@ -386,26 +399,102 @@ function AdminUsersPage({ showToast }) {
     }
   }
 
-  async function deleteUser(userId) {
-    if (!window.confirm('Are you sure you want to delete this user?')) return;
+  // Hand a candidate to a recruiter, or pass an empty id to take them off.
+  async function assignRecruiter(userId, recruiterId) {
+    setSavingId(userId);
     try {
-      const data = await apiRequest(`/api/admin/users/${userId}`, { method: 'DELETE' });
+      const data = await apiRequest(`/api/admin/users/${userId}/assign-recruiter`, {
+        method: 'PATCH',
+        body: { recruiterId }
+      });
+
+      // Update just this row rather than refetching the whole table.
+      setUsers((current) =>
+        current.map((user) =>
+          user.id === userId
+            ? { ...user, assignedRecruiterId: data.user?.assignedRecruiterId ?? null }
+            : user
+        )
+      );
+
+      showToast(data.message || 'Assignment updated.');
+    } catch (error) {
+      showToast(error.message || 'Unable to assign this candidate.');
+    } finally {
+      setSavingId('');
+    }
+  }
+
+  async function deleteUser(user) {
+    try {
+      const data = await apiRequest(`/api/admin/users/${user.id}`, { method: 'DELETE' });
       setUsers(data.users || []);
       showToast('User deleted successfully.');
     } catch (error) {
       showToast(error.message || 'Failed to delete user.');
+    } finally {
+      setPendingDelete(null);
     }
   }
 
+  const candidateCount = users.filter((user) => user.role === 'user').length;
+  const unassignedCount = users.filter(
+    (user) => user.role === 'user' && !user.assignedRecruiterId
+  ).length;
+
+  const visible = users.filter((user) => {
+    if (filter === 'all') return true;
+    if (filter === 'unassigned') return user.role === 'user' && !user.assignedRecruiterId;
+    if (filter === 'assigned') return user.role === 'user' && user.assignedRecruiterId;
+    return user.role === filter;
+  });
+
+  const FILTERS = [
+    ['all', `All (${users.length})`],
+    ['unassigned', `Unassigned (${unassignedCount})`],
+    ['assigned', `Assigned (${candidateCount - unassignedCount})`],
+    ['recruiter', 'Recruiters']
+  ];
+
   return (
     <section>
-      <PageHeader title="User Management" subtitle="Change roles, activate or deactivate accounts, and remove users." />
-      <Card title="All users">
+      <PageHeader
+        title="User Management"
+        subtitle="Assign candidates to recruiters, change roles, and manage accounts."
+      />
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        {FILTERS.map(([value, label]) => {
+          const on = filter === value;
+          return (
+            <button
+              key={value}
+              onClick={() => setFilter(value)}
+              className={`rounded-full border px-3 py-1.5 text-[12.5px] font-bold transition ${
+                on
+                  ? 'border-violet-300 bg-violet-50 text-violet-700'
+                  : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      <Card
+        title="All users"
+        hint={
+          recruiters.length
+            ? 'Pick a recruiter to hand a candidate over. Choose "Unassigned" to take them back.'
+            : 'No active recruiters yet — approve a recruiter before assigning candidates.'
+        }
+      >
         {loading ? (
           <EmptyState text="Loading users..." />
-        ) : users.length ? (
-          <DataTable headers={['User', 'Email', 'Role', 'Status', 'Created', '']}>
-            {users.map((user) => (
+        ) : visible.length ? (
+          <DataTable headers={['User', 'Email', 'Role', 'Recruiter', 'Status', 'Created', '']}>
+            {visible.map((user) => (
               <tr key={user.id}>
                 <td className="border-t border-slate-200 px-2.5 py-2.5 text-[13px] font-bold text-slate-900">{user.name}</td>
                 <td className="border-t border-slate-200 px-2.5 py-2.5 text-[13px] text-slate-500">{user.email}</td>
@@ -421,6 +510,30 @@ function AdminUsersPage({ showToast }) {
                     <option value="user">User</option>
                   </select>
                 </td>
+
+                {/* Only job seekers belong to a recruiter. */}
+                <td className="border-t border-slate-200 px-2.5 py-2.5">
+                  {user.role === 'user' ? (
+                    <select
+                      value={user.assignedRecruiterId || ''}
+                      disabled={savingId === user.id || !recruiters.length}
+                      onChange={(event) => assignRecruiter(user.id, event.target.value)}
+                      className={`${inputClass} w-auto ${
+                        user.assignedRecruiterId ? '' : 'text-amber-700'
+                      }`}
+                    >
+                      <option value="">Unassigned</option>
+                      {recruiters.map((recruiter) => (
+                        <option key={recruiter.id} value={recruiter.id}>
+                          {recruiter.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="text-[13px] text-slate-400">—</span>
+                  )}
+                </td>
+
                 <td className="border-t border-slate-200 px-2.5 py-2.5">
                   <select
                     value={user.status}
@@ -437,7 +550,7 @@ function AdminUsersPage({ showToast }) {
                 <td className="border-t border-slate-200 px-2.5 py-2.5 text-right">
                   <button
                     className="rounded-lg bg-red-50 px-2.5 py-1 text-[11px] font-bold text-red-700 hover:bg-red-100"
-                    onClick={() => deleteUser(user.id)}
+                    onClick={() => setPendingDelete(user)}
                   >
                     Delete
                   </button>
@@ -446,9 +559,23 @@ function AdminUsersPage({ showToast }) {
             ))}
           </DataTable>
         ) : (
-          <EmptyState text="No users found." />
+          <EmptyState text="No users match this filter." />
         )}
       </Card>
+
+      <ConfirmModal
+        open={Boolean(pendingDelete)}
+        title="Delete this account?"
+        body={
+          pendingDelete
+            ? `${pendingDelete.name} (${pendingDelete.email}) will be permanently removed, along with their applications and documents. This cannot be undone.`
+            : ''
+        }
+        confirmLabel="Delete account"
+        tone="red"
+        onConfirm={() => deleteUser(pendingDelete)}
+        onCancel={() => setPendingDelete(null)}
+      />
     </section>
   );
 }

@@ -88,6 +88,11 @@ export default function registerAdminRoutes(app) {
         pendingApprovals: visibleUsers.filter(
           (user) => pendingStatuses.includes(user.status) && user.emailVerified === true
         ).length,
+        // How many job seekers nobody is looking after yet. Surfaced so the
+        // dashboard can show a real number instead of a decorative badge.
+        unassignedCandidates: visibleUsers.filter(
+          (user) => user.role === 'user' && !user.assignedRecruiterId
+        ).length,
         usersByRole: {
           super_admin: visibleUsers.filter((u) => u.role === 'super_admin').length,
           admin: visibleUsers.filter((u) => u.role === 'admin').length,
@@ -116,10 +121,105 @@ export default function registerAdminRoutes(app) {
       const { page, pageSize, limit, offset } = parsePagination(req.query);
       const users = await listUsers({ roles, limit, offset });
       const total = await countUsers({ roles });
+
+      // The dropdown in User Management needs the list of recruiters it can
+      // assign to, so it ships with the same response rather than a second call.
+      const recruiters = (
+        await listUsers({ roles: ['recruiter'], statuses: ['active'] })
+      ).map((recruiter) => ({
+        id: recruiter.id,
+        name: recruiter.name,
+        email: recruiter.email
+      }));
+
       return res.json({
         users: users.map(sanitizeUser),
+        recruiters,
         pagination: { page, pageSize, total, hasMore: offset + users.length < total }
       });
+    }
+  );
+
+  /* ------------------------------------------------------------------ *
+   * Assign a candidate to a recruiter.
+   *
+   * This is the core of the recruiter model: an admin decides which
+   * recruiter looks after which job seeker. The recruiter then sees only
+   * those people — enforced in the recruiter routes, not here.
+   *
+   * Passing an empty recruiterId unassigns the candidate.
+   * ------------------------------------------------------------------ */
+  app.patch(
+    '/api/admin/users/:userId/assign-recruiter',
+    requireAuth,
+    requirePermission('account:user:manage'),
+    async (req, res) => {
+      try {
+        const targetUser = await findUserById(String(req.params.userId));
+
+        if (!targetUser) {
+          return res.status(404).json({ message: 'User not found.' });
+        }
+
+        if (targetUser.role !== 'user') {
+          return res.status(400).json({
+            message: 'Only job seekers can be assigned to a recruiter.'
+          });
+        }
+
+        const rawRecruiterId = String(req.body.recruiterId ?? '').trim();
+
+        // Empty means "unassign".
+        if (!rawRecruiterId) {
+          const cleared = await updateUser(targetUser.id, {
+            assignedRecruiterId: null,
+            updatedAt: new Date().toISOString()
+          });
+
+          await addAuditLog({
+            actorId: req.user.id,
+            actorRole: req.user.role,
+            action: 'CANDIDATE_UNASSIGNED',
+            targetUserId: targetUser.id,
+            metadata: { previousRecruiterId: targetUser.assignedRecruiterId || null }
+          });
+
+          return res.json({
+            message: `${cleared.name} is no longer assigned to a recruiter.`,
+            user: sanitizeUser(cleared)
+          });
+        }
+
+        const recruiter = await findUserById(rawRecruiterId);
+
+        if (!recruiter || recruiter.role !== 'recruiter' || recruiter.status !== 'active') {
+          return res.status(400).json({ message: 'Select an active recruiter.' });
+        }
+
+        const updated = await updateUser(targetUser.id, {
+          assignedRecruiterId: recruiter.id,
+          updatedAt: new Date().toISOString()
+        });
+
+        await addAuditLog({
+          actorId: req.user.id,
+          actorRole: req.user.role,
+          action: 'CANDIDATE_ASSIGNED',
+          targetUserId: targetUser.id,
+          metadata: {
+            recruiterId: recruiter.id,
+            previousRecruiterId: targetUser.assignedRecruiterId || null
+          }
+        });
+
+        return res.json({
+          message: `${updated.name} assigned to ${recruiter.name}.`,
+          user: sanitizeUser(updated)
+        });
+      } catch (error) {
+        console.error('Candidate assignment failed:', error);
+        return res.status(500).json({ message: 'Unable to assign this candidate.' });
+      }
     }
   );
 
@@ -330,6 +430,11 @@ export default function registerAdminRoutes(app) {
           updatedAt: now
         };
 
+        // Someone who stops being a job seeker cannot stay on a recruiter's list.
+        if (nextRole !== 'user' && currentUser.assignedRecruiterId) {
+          patch.assignedRecruiterId = null;
+        }
+
         const wasPending = ['pending_admin_approval', 'pending_super_admin_approval'].includes(previousStatus);
 
         if (nextStatus === 'active' && wasPending) {
@@ -418,6 +523,25 @@ export default function registerAdminRoutes(app) {
 
       await deleteUser(userId);
 
+      // Deleting a recruiter would otherwise leave their candidates pointing
+      // at an account that no longer exists.
+      if (targetUser.role === 'recruiter') {
+        const orphaned = await listUsers({ assignedRecruiterId: targetUser.id });
+
+        for (const candidate of orphaned) {
+          await updateUser(candidate.id, { assignedRecruiterId: null });
+        }
+
+        if (orphaned.length) {
+          await addAuditLog({
+            actorId: req.user.id,
+            actorRole: req.user.role,
+            action: 'CANDIDATES_UNASSIGNED_ON_RECRUITER_DELETE',
+            metadata: { recruiterId: targetUser.id, count: orphaned.length }
+          });
+        }
+      }
+
       await addAuditLog({
         actorId: req.user.id,
         actorRole: req.user.role,
@@ -443,12 +567,10 @@ export default function registerAdminRoutes(app) {
     requirePermission('report:view'),
     async (req, res) => {
       try {
-        const [usersResult, applications] = await Promise.all([
+        const [users, applications] = await Promise.all([
           listUsers({}),
           listApplications({ kind: 'internal' })
         ]);
-
-        const users = usersResult.users || usersResult || [];
 
         return res.json({
           growth: platformGrowth(users, applications),
@@ -492,8 +614,34 @@ export default function registerAdminRoutes(app) {
         return res.status(404).json({ message: 'Internal application not found.' });
       }
 
-      const recruiterId = String(req.body.recruiterId || '');
-      const recruiter = await findUserById(recruiterId);
+      const rawRecruiterId = String(req.body.recruiterId ?? '').trim();
+
+      // Empty means "take this application off whoever has it".
+      if (!rawRecruiterId) {
+        const cleared = await updateApplication(application.id, {
+          assignedRecruiterId: null,
+          assignedBy: req.user.id,
+          assignedAt: new Date().toISOString()
+        });
+
+        await addAuditLog({
+          actorId: req.user.id,
+          actorRole: req.user.role,
+          action: 'APPLICATION_UNASSIGNED',
+          targetUserId: application.userId,
+          metadata: {
+            applicationId: application.id,
+            previousRecruiterId: application.assignedRecruiterId || null
+          }
+        });
+
+        return res.json({
+          message: 'Application unassigned.',
+          application: await enrichInternalApplication(cleared)
+        });
+      }
+
+      const recruiter = await findUserById(rawRecruiterId);
 
       if (!recruiter || recruiter.role !== 'recruiter' || recruiter.status !== 'active') {
         return res.status(400).json({ message: 'Select an active Recruiter.' });

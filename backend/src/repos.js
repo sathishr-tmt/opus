@@ -50,6 +50,7 @@ const USER_FIELDS = new Map([
   ['experienceYears', 'experienceYears'],
   ['company', 'company'],
   ['department', 'department'],
+  ['assignedRecruiterId', 'assignedRecruiterId'],
   ['sessionVersion', 'sessionVersion'],
   ['emailVerificationTokenHash', 'emailVerificationTokenHash'],
   ['emailVerificationExpiresAt', 'emailVerificationExpiresAt'],
@@ -80,6 +81,8 @@ export function rowToUser(row) {
     experienceYears: row.experienceYears ?? undefined,
     company: row.company ?? undefined,
     department: row.department ?? undefined,
+    // Which recruiter looks after this candidate. null = unassigned.
+    assignedRecruiterId: row.assignedRecruiterId ?? null,
     sessionVersion: row.sessionVersion,
     emailVerificationTokenHash:
       row.emailVerificationTokenHash ?? null,
@@ -137,6 +140,7 @@ export async function findUserByColumn(column, value) {
 export async function listUsers({
   roles = null,
   statuses = null,
+  assignedRecruiterId = undefined,
   limit = null,
   offset = 0
 } = {}) {
@@ -148,6 +152,13 @@ export async function listUsers({
 
   if (statuses?.length) {
     filter.status = { $in: statuses };
+  }
+
+  // undefined means "do not filter on this at all".
+  // null means "only users nobody is looking after yet", which is how an
+  // admin finds the unassigned queue.
+  if (assignedRecruiterId !== undefined) {
+    filter.assignedRecruiterId = assignedRecruiterId;
   }
 
   let query = User.find(filter).sort({ createdAt: -1 });
@@ -191,6 +202,7 @@ export async function insertUser(user) {
       : null,
     company: user.company ?? null,
     department: user.department ?? null,
+    assignedRecruiterId: user.assignedRecruiterId ?? null,
     sessionVersion: Number(
       user.sessionVersion || 1
     ),
@@ -289,7 +301,8 @@ export async function deleteUser(id) {
 
 export async function countUsers({
   roles = null,
-  statuses = null
+  statuses = null,
+  assignedRecruiterId = undefined
 } = {}) {
   const filter = {};
 
@@ -299,6 +312,10 @@ export async function countUsers({
 
   if (statuses?.length) {
     filter.status = { $in: statuses };
+  }
+
+  if (assignedRecruiterId !== undefined) {
+    filter.assignedRecruiterId = assignedRecruiterId;
   }
 
   return User.countDocuments(filter);
@@ -808,6 +825,7 @@ export async function findApplicationById(id) {
 
 export async function listApplications({
   userId = null,
+  userIds = null,
   recruiterId = null,
   kind = null,
   jobId = null,
@@ -818,6 +836,12 @@ export async function listApplications({
 
   if (userId) {
     filter.userId = userId;
+  }
+
+  // Used by the recruiter portal: every application belonging to the
+  // candidates assigned to that recruiter.
+  if (userIds?.length) {
+    filter.userId = { $in: userIds };
   }
 
   if (recruiterId) {
@@ -982,7 +1006,10 @@ export async function insertInterview(interview) {
 
 export async function listInterviews({
   applicationId = null,
-  recruiterId = null
+  applicationIds = null,
+  recruiterId = null,
+  userId = null,
+  userIds = null
 } = {}) {
   const filter = {};
 
@@ -990,8 +1017,20 @@ export async function listInterviews({
     filter.applicationId = applicationId;
   }
 
+  if (applicationIds?.length) {
+    filter.applicationId = { $in: applicationIds };
+  }
+
   if (recruiterId) {
     filter.recruiterId = recruiterId;
+  }
+
+  if (userId) {
+    filter.userId = userId;
+  }
+
+  if (userIds?.length) {
+    filter.userId = { $in: userIds };
   }
 
   const rows = await Interview.find(filter)

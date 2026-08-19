@@ -252,7 +252,13 @@ export default function registerSearchRoutes(app) {
 
       if (role === 'admin' || role === 'super_admin') {
         const [pendingUsers, applications] = await Promise.all([
-          countUsers({ status: 'pending_admin_approval' }).catch(() => 0),
+          countUsers({
+  statuses: [
+    role === 'super_admin'
+      ? 'pending_super_admin_approval'
+      : 'pending_admin_approval'
+  ]
+}).catch(() => 0),
           listApplications({ kind: 'internal' })
         ]);
 
