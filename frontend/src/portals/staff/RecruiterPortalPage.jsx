@@ -4,15 +4,20 @@
 // enforced on the server; this file simply renders what it is given.
 import { useState, useEffect } from 'react';
 import {
-  BriefcaseBusiness, CheckCircle2, Users, CalendarCheck, ArrowLeft, FileText, Link2
+  BriefcaseBusiness, CheckCircle2, Users, CalendarCheck, ArrowLeft, FileText, Link2,
+  List, LayoutGrid, CalendarPlus
 } from 'lucide-react';
 import { apiRequest, API_BASE } from '../../lib/api.js';
 import {
   PageHeader, Card, StatTile, Pill, ListItem, Field, MonthCalendar,
-  inputClass, btnClass, btnPrimaryClass, btnSmClass, EmptyState, ExportMenu, KpiCard
+  inputClass, btnClass, btnPrimaryClass, btnSmClass, EmptyState, ExportMenu, KpiCard,
+  Feed, KanbanBoard
 } from '../../components/ui.jsx';
-import { StatusDonut, RecruitmentFunnel } from '../../components/charts.jsx';
+import {
+  StatusDonut, RecruitmentFunnel, TrendChart, BarComparison
+} from '../../components/charts.jsx';
 import { AccountPanel } from '../../components/AccountPanel.jsx';
+import { formatMoney } from '../../lib/constants.js';
 
 const CANDIDATE_STATUSES = [
   'Applied', 'Under Review', 'Online Assessment', 'Technical Interview',
@@ -24,6 +29,58 @@ const STATUS_ORDER = {
   Applied: 0, 'Under Review': 1, 'Online Assessment': 2,
   'Technical Interview': 3, 'Final Interview': 4, Offer: 5
 };
+
+// Board columns. Both interview rounds share one column, so dropping there
+// sets the first round; the list view still exposes every individual status.
+const INTERVIEW_STATUSES = ['Technical Interview', 'Final Interview'];
+
+const BOARD_COLUMNS = [
+  { key: 'Applied',           label: 'Applied',    color: '#2563eb' },
+  { key: 'Under Review',      label: 'Review',     color: '#d97706' },
+  { key: 'Online Assessment', label: 'Assessment', color: '#4f46e5' },
+  { key: 'Interview',         label: 'Interview',  color: '#7c3aed' },
+  { key: 'Offer',             label: 'Offer',      color: '#16a34a' },
+  { key: 'Rejected',          label: 'Rejected',   color: '#dc2626' }
+];
+
+function columnFor(application) {
+  if (INTERVIEW_STATUSES.includes(application.status)) return 'Interview';
+  return application.status || 'Applied';
+}
+
+// Chips above the board: "All stages" plus one per column.
+const STAGE_FILTERS = [
+  ['all', 'All stages'],
+  ...BOARD_COLUMNS.map((column) => [column.key, column.label])
+];
+
+// Applications grouped into the last 8 weeks, for the trend chart.
+function weeklyBuckets(applications, weeks = 8) {
+  const now = new Date();
+  const buckets = [];
+
+  for (let i = weeks - 1; i >= 0; i -= 1) {
+    const end = new Date(now);
+    end.setDate(end.getDate() - i * 7);
+    const start = new Date(end);
+    start.setDate(start.getDate() - 7);
+    buckets.push({ label: `W${weeks - i}`, start, end, count: 0 });
+  }
+
+  for (const application of applications) {
+    const when = new Date(application.appliedAt || application.updatedAt || 0);
+    if (Number.isNaN(when.getTime())) continue;
+
+    for (const bucket of buckets) {
+      if (when > bucket.start && when <= bucket.end) {
+        bucket.count += 1;
+        break;
+      }
+    }
+  }
+
+  return buckets;
+}
 
 function formatWhen(startsAt) {
   if (!startsAt) return 'Unscheduled';
@@ -340,6 +397,13 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
   });
   const [savingJob, setSavingJob] = useState(false);
   const [creatingPosting, setCreatingPosting] = useState(false);
+  const [stageFilter, setStageFilter] = useState('all');
+  const [postingFilter, setPostingFilter] = useState('all');
+  const [boardView, setBoardView] = useState('board');
+  const [openJobId, setOpenJobId] = useState('');
+  const [editJobId, setEditJobId] = useState('');
+  const [editForm, setEditForm] = useState(null);
+  const [savingEdit, setSavingEdit] = useState(false);
   const [importUrl, setImportUrl] = useState('');
   const [importing, setImporting] = useState(false);
   const [importNote, setImportNote] = useState('');
@@ -373,7 +437,8 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
         } else if (activePage === 'recruiter-candidates') {
           await loadCandidates();
         } else if (activePage === 'recruiter-jobs' || activePage === 'recruiter-create-job') {
-          await loadJobs();
+          // Applications too, so each posting can show how many people applied.
+          await Promise.all([loadJobs(), loadApplications()]);
         } else if (activePage === 'recruiter-applications' || activePage === 'recruiter-calendar') {
           await loadApplications();
         }
@@ -467,6 +532,52 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
     }
   }
 
+  // Open a posting for editing, pre-filled with what is already published.
+  function beginEdit(job) {
+    setEditJobId(job.id);
+    setOpenJobId(job.id);
+    setEditForm({
+      title: job.title || '',
+      department: job.department || '',
+      location: job.location || '',
+      workMode: job.workMode || 'Onsite',
+      employmentType: job.jobType || 'Full-time',
+      experienceRequirement: job.experienceRequirement || '',
+      minSalary: job.minSalary || '',
+      maxSalary: job.maxSalary || '',
+      description: job.description || '',
+      recruiterEmail: job.recruiterEmail || '',
+      recruiterPhone: job.recruiterPhone || ''
+    });
+  }
+
+  function updateEditForm(name, value) {
+    setEditForm((previous) => ({ ...previous, [name]: value }));
+  }
+
+  async function saveEdit(jobId) {
+    if (!editForm.title.trim() || !editForm.location.trim()) {
+      showToast('Job title and location are required.');
+      return;
+    }
+
+    setSavingEdit(true);
+    try {
+      await apiRequest(`/api/recruiter/jobs/${jobId}`, {
+        method: 'PATCH',
+        body: editForm
+      });
+      showToast('Posting updated.');
+      setEditJobId('');
+      setEditForm(null);
+      await loadJobs();
+    } catch (error) {
+      showToast(error.message || 'Unable to update the posting.');
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
   async function togglePosting(job) {
     const status = job.status === 'open' ? 'closed' : 'open';
     try {
@@ -499,6 +610,16 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
     } catch (error) {
       showToast(error.message || 'Unable to save note.');
     }
+  }
+
+  // Dragging a card between columns updates the real status through the same
+  // endpoint the dropdown uses — nothing bypasses the backend.
+  function moveApplication(application, columnKey) {
+    const nextStatus =
+      columnKey === 'Interview' ? INTERVIEW_STATUSES[0] : columnKey;
+
+    if (application.status === nextStatus) return;
+    setCandidateStatus(application.id, nextStatus);
   }
 
   async function scheduleInterview(applicationId, startsAt) {
@@ -536,13 +657,68 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
       { name: 'Assessment', value: reached(2) },
       { name: 'Interview', value: reached(3) },
       { name: 'Offer', value: reached(5) }
-    ];
+    ].filter((stage) => stage.value > 0);
+
+    const buckets = weeklyBuckets(applications);
+
+    const byPosting = applications.reduce((acc, application) => {
+      const title = application.title || 'Other';
+      acc[title] = (acc[title] || 0) + 1;
+      return acc;
+    }, {});
+    const postingEntries = Object.entries(byPosting)
+      .sort((left, right) => right[1] - left[1])
+      .slice(0, 6);
+
+    // Recent activity, derived from records that actually exist: the latest
+    // status on each application, plus any interview that has been booked.
+    const activity = [
+      ...applications.map((application) => ({
+        when: new Date(application.updatedAt || application.appliedAt || 0).getTime(),
+        icon: CheckCircle2,
+        tone:
+          application.status === 'Rejected'
+            ? 'red'
+            : application.status === 'Offer'
+            ? 'green'
+            : 'violet',
+        text: `${application.candidate?.name || 'Candidate'} — ${application.status}`,
+        meta: application.title || ''
+      })),
+      ...interviews.map(({ application, interview }) => ({
+        when: new Date(interview.createdAt || interview.startsAt || 0).getTime(),
+        icon: CalendarPlus,
+        tone: 'blue',
+        text: `Interview scheduled with ${application.candidate?.name || 'candidate'}`,
+        meta: `${application.title || ''} · ${formatWhen(interview.startsAt)}`
+      }))
+    ]
+      .filter((entry) => entry.when > 0)
+      .sort((left, right) => right.when - left.when)
+      .slice(0, 6);
 
     return (
       <section>
-        <PageHeader title="Dashboard" subtitle="Your candidates, postings and interviews." />
+        <PageHeader
+          title="Recruiter Dashboard"
+          subtitle="Your candidates, postings and interviews."
+          action={
+            <ExportMenu
+              options={[
+                {
+                  label: 'Assigned candidates (CSV)',
+                  path: '/api/exports/recruiter/assigned-applications.csv'
+                },
+                {
+                  label: 'My interviews (calendar file)',
+                  path: '/api/exports/recruiter/interviews.ics'
+                }
+              ]}
+            />
+          }
+        />
+
         <div className="mb-4 grid gap-3.5 md:grid-cols-4">
-          {/* Each card opens the page it summarises. */}
           <KpiCard
             label="My candidates"
             value={overview?.counts?.myCandidates ?? candidates.length}
@@ -551,18 +727,18 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
             onClick={() => setActivePage && setActivePage('recruiter-candidates')}
           />
           <KpiCard
+            label="Assigned applications"
+            value={overview?.counts?.assignedApplications ?? total}
+            icon={BriefcaseBusiness}
+            tone="blue"
+            onClick={() => setActivePage && setActivePage('recruiter-applications')}
+          />
+          <KpiCard
             label="Needs action"
             value={overview?.counts?.needsAction ?? 0}
             icon={CheckCircle2}
             tone={overview?.counts?.needsAction ? 'amber' : 'slate'}
             onClick={() => setActivePage && setActivePage('recruiter-applications')}
-          />
-          <KpiCard
-            label="Active postings"
-            value={overview?.counts?.activePostings ?? 0}
-            icon={BriefcaseBusiness}
-            tone="blue"
-            onClick={() => setActivePage && setActivePage('recruiter-jobs')}
           />
           <KpiCard
             label="Upcoming interviews"
@@ -573,19 +749,70 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
           />
         </div>
 
-        {total > 0 && (
-          <div className="mb-4 grid gap-3.5 lg:grid-cols-2">
-            <Card title="Candidate status" hint="Where your candidates sit right now">
+        {/* Charts always render. With nothing to draw they say so, rather than
+            vanishing and making the page look broken. */}
+        <div className="mb-3.5 grid gap-3.5 lg:grid-cols-2">
+          <Card title="Applications over time" hint="Candidates assigned to you each week">
+            {total ? (
+              <TrendChart
+                categories={buckets.map((bucket) => bucket.label)}
+                series={[{ name: 'Applications', data: buckets.map((b) => b.count) }]}
+                height={240}
+              />
+            ) : (
+              <EmptyState text="No applications yet." />
+            )}
+          </Card>
+
+          <Card title="Candidate status" hint="Current distribution">
+            {donutData.length ? (
               <StatusDonut data={donutData} height={240} />
-            </Card>
-            <Card
-              title="Recruitment funnel"
-              hint="Each stage counts everyone who reached at least that far"
-            >
+            ) : (
+              <EmptyState text="No applications yet." />
+            )}
+          </Card>
+        </div>
+
+        <div className="mb-3.5 grid gap-3.5 lg:grid-cols-2">
+          <Card
+            title="Recruitment funnel"
+            hint="Each stage counts everyone who reached at least that far"
+            action={
+              <button
+                className="text-[13px] font-bold text-violet-700"
+                onClick={() => setActivePage && setActivePage('recruiter-applications')}
+              >
+                View pipeline &rarr;
+              </button>
+            }
+          >
+            {funnelData.length ? (
               <RecruitmentFunnel data={funnelData} height={240} />
-            </Card>
-          </div>
-        )}
+            ) : (
+              <EmptyState text="No applications yet." />
+            )}
+          </Card>
+
+          <Card title="Applications by posting" hint="Which roles draw the most candidates">
+            {postingEntries.length ? (
+              <BarComparison
+                categories={postingEntries.map(([title]) => title)}
+                data={postingEntries.map(([, count]) => count)}
+                height={240}
+              />
+            ) : (
+              <EmptyState text="No applications yet." />
+            )}
+          </Card>
+        </div>
+
+        <Card title="Recent activity" hint="The latest changes across your candidates">
+          {activity.length ? (
+            <Feed items={activity} />
+          ) : (
+            <EmptyState text="Nothing has happened yet." />
+          )}
+        </Card>
 
         <Card
           title="My candidates"
@@ -874,21 +1101,198 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
           {loading ? (
             <EmptyState text="Loading postings..." />
           ) : jobs.length ? (
-            jobs.map((job) => (
-              <ListItem
-                key={job.id}
-                title={job.title}
-                meta={`${job.location} · ${job.workMode} · ${job.jobType}`}
-                right={
-                  <>
-                    <Pill>{job.status}</Pill>
-                    <button className={btnSmClass} onClick={() => togglePosting(job)}>
-                      {job.status === 'open' ? 'Close' : 'Reopen'}
-                    </button>
-                  </>
-                }
-              />
-            ))
+            jobs.map((job) => {
+              const isOpen = openJobId === job.id;
+              const isEditing = editJobId === job.id;
+
+              // How many of your assigned candidates applied to this posting.
+              const applicants = applications.filter(
+                (application) => application.title === job.title
+              );
+
+              return (
+                <div
+                  key={job.id}
+                  className="mb-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3.5"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2.5">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate text-sm font-bold text-slate-900">{job.title}</p>
+                        <Pill tone={job.status === 'open' ? 'green' : 'slate'}>{job.status}</Pill>
+                        {applicants.length > 0 && (
+                          <Pill tone="violet">
+                            {applicants.length} applicant{applicants.length === 1 ? '' : 's'}
+                          </Pill>
+                        )}
+                      </div>
+
+                      <p className="mt-0.5 truncate text-xs text-slate-500">
+                        {[job.location, job.workMode, job.jobType].filter(Boolean).join(' · ')}
+                      </p>
+                    </div>
+
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      <button
+                        className={btnClass}
+                        onClick={() => {
+                          setOpenJobId(isOpen ? '' : job.id);
+                          if (isEditing) {
+                            setEditJobId('');
+                            setEditForm(null);
+                          }
+                        }}
+                      >
+                        {isOpen ? 'Hide' : 'View'}
+                      </button>
+
+                      {!isEditing && (
+                        <button className={btnClass} onClick={() => beginEdit(job)}>
+                          Edit
+                        </button>
+                      )}
+
+                      <button className={btnSmClass} onClick={() => togglePosting(job)}>
+                        {job.status === 'open' ? 'Close' : 'Reopen'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Read-only detail */}
+                  {isOpen && !isEditing && (
+                    <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3.5">
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <div>
+                          <p className="text-[11px] font-bold uppercase text-slate-400">Department</p>
+                          <p className="text-[13px] text-slate-700">{job.department || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-bold uppercase text-slate-400">Salary</p>
+                          <p className="text-[13px] text-slate-700">
+                            {job.minSalary || job.maxSalary
+                              ? `${formatMoney(job.minSalary)} – ${formatMoney(job.maxSalary)}`
+                              : 'Not listed'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-bold uppercase text-slate-400">Experience</p>
+                          <p className="text-[13px] text-slate-700">
+                            {job.experienceRequirement || '—'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <p className="mt-3 text-[11px] font-bold uppercase text-slate-400">
+                        Description
+                      </p>
+                      <p className="mt-1 whitespace-pre-line text-[13px] leading-6 text-slate-600">
+                        {job.description || 'No description was added to this posting.'}
+                      </p>
+
+                      {(job.recruiterEmail || job.recruiterPhone) && (
+                        <>
+                          <p className="mt-3 text-[11px] font-bold uppercase text-slate-400">
+                            Contact shown to candidates
+                          </p>
+                          <p className="mt-1 text-[13px] text-slate-600">
+                            {[job.recruiterEmail, job.recruiterPhone].filter(Boolean).join(' · ')}
+                          </p>
+                        </>
+                      )}
+
+                      {applicants.length > 0 && (
+                        <button
+                          className={`${btnClass} mt-3`}
+                          onClick={() => setActivePage && setActivePage('recruiter-applications')}
+                        >
+                          View {applicants.length} applicant
+                          {applicants.length === 1 ? '' : 's'} &rarr;
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Edit form, pre-filled with what is published */}
+                  {isEditing && editForm && (
+                    <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3.5">
+                      <Field label="Job title">
+                        <input className={inputClass} value={editForm.title}
+                          onChange={(e) => updateEditForm('title', e.target.value)} />
+                      </Field>
+
+                      <div className="grid gap-3.5 md:grid-cols-2">
+                        <Field label="Location">
+                          <input className={inputClass} value={editForm.location}
+                            onChange={(e) => updateEditForm('location', e.target.value)} />
+                        </Field>
+                        <Field label="Work mode">
+                          <select className={inputClass} value={editForm.workMode}
+                            onChange={(e) => updateEditForm('workMode', e.target.value)}>
+                            <option>Onsite</option><option>Remote</option><option>Hybrid</option>
+                          </select>
+                        </Field>
+                        <Field label="Employment type">
+                          <select className={inputClass} value={editForm.employmentType}
+                            onChange={(e) => updateEditForm('employmentType', e.target.value)}>
+                            <option>Full-time</option><option>Part-time</option>
+                            <option>Contract</option><option>Internship</option>
+                          </select>
+                        </Field>
+                        <Field label="Department">
+                          <input className={inputClass} value={editForm.department}
+                            onChange={(e) => updateEditForm('department', e.target.value)} />
+                        </Field>
+                        <Field label="Minimum salary">
+                          <input className={inputClass} type="number" value={editForm.minSalary}
+                            onChange={(e) => updateEditForm('minSalary', e.target.value)} />
+                        </Field>
+                        <Field label="Maximum salary">
+                          <input className={inputClass} type="number" value={editForm.maxSalary}
+                            onChange={(e) => updateEditForm('maxSalary', e.target.value)} />
+                        </Field>
+                      </div>
+
+                      <Field label="Experience requirement">
+                        <input className={inputClass} value={editForm.experienceRequirement}
+                          onChange={(e) => updateEditForm('experienceRequirement', e.target.value)} />
+                      </Field>
+
+                      <Field label="Description">
+                        <textarea rows={4} className={inputClass} value={editForm.description}
+                          onChange={(e) => updateEditForm('description', e.target.value)} />
+                      </Field>
+
+                      <div className="grid gap-3.5 md:grid-cols-2">
+                        <Field label="Recruiter email">
+                          <input className={inputClass} type="email" value={editForm.recruiterEmail}
+                            onChange={(e) => updateEditForm('recruiterEmail', e.target.value)} />
+                        </Field>
+                        <Field label="Recruiter phone number">
+                          <input className={inputClass} value={editForm.recruiterPhone}
+                            onChange={(e) => updateEditForm('recruiterPhone', e.target.value)} />
+                        </Field>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          className={btnPrimaryClass}
+                          disabled={savingEdit}
+                          onClick={() => saveEdit(job.id)}
+                        >
+                          {savingEdit ? 'Saving...' : 'Save changes'}
+                        </button>
+                        <button
+                          className={btnClass}
+                          onClick={() => { setEditJobId(''); setEditForm(null); }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })
           ) : (
             <EmptyState text="You have no postings yet." />
           )}
@@ -900,35 +1304,160 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
   /* ---------------- assigned applications ---------------- */
 
   if (activePage === 'recruiter-applications') {
+    const postings = [...new Set(applications.map((a) => a.title).filter(Boolean))].sort();
+
+    const scoped = applications.filter(
+      (application) => postingFilter === 'all' || application.title === postingFilter
+    );
+
+    const visible = scoped.filter(
+      (application) => stageFilter === 'all' || columnFor(application) === stageFilter
+    );
+
+    // Chip counts respect the posting filter, so the numbers always match
+    // what clicking that chip would actually show.
+    const countFor = (key) =>
+      key === 'all'
+        ? scoped.length
+        : scoped.filter((application) => columnFor(application) === key).length;
+
     return (
       <section>
         <PageHeader
           title="Assigned Applications"
-          subtitle="Review and progress your candidates."
+          subtitle="Candidates assigned to you."
           action={
-            <ExportMenu
-              options={[
-                {
-                  label: 'Assigned candidates (CSV)',
-                  path: '/api/exports/recruiter/assigned-applications.csv'
-                },
-                {
-                  label: 'My interviews (calendar file)',
-                  path: '/api/exports/recruiter/interviews.ics'
-                }
-              ]}
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
+                {[
+                  ['board', 'Board', LayoutGrid],
+                  ['list', 'List', List]
+                ].map(([key, label, Icon]) => (
+                  <button
+                    key={key}
+                    onClick={() => setBoardView(key)}
+                    className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[12.5px] font-bold transition ${
+                      boardView === key
+                        ? 'bg-slate-900 text-white'
+                        : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                  >
+                    <Icon size={14} /> {label}
+                  </button>
+                ))}
+              </div>
+
+              <ExportMenu
+                options={[
+                  {
+                    label: 'Assigned candidates (CSV)',
+                    path: '/api/exports/recruiter/assigned-applications.csv'
+                  },
+                  {
+                    label: 'My interviews (calendar file)',
+                    path: '/api/exports/recruiter/interviews.ics'
+                  }
+                ]}
+              />
+            </div>
           }
         />
-        <Card title="Assigned applications">
-          <p className="mb-3.5 text-[13px] text-slate-500">
-            Update status, add notes, and schedule interviews for the candidates
-            assigned to you.
-          </p>
+
+        {/* Stage chips on the left, posting dropdown on the right. */}
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          {STAGE_FILTERS.map(([key, label]) => {
+            const on = stageFilter === key;
+            const count = countFor(key);
+
+            return (
+              <button
+                key={key}
+                onClick={() => setStageFilter(key)}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12.5px] font-bold transition ${
+                  on
+                    ? 'border-violet-300 bg-violet-50 text-violet-700'
+                    : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+                }`}
+              >
+                {label}
+                {count > 0 && (
+                  <span
+                    className={`rounded-full px-1.5 text-[11px] font-extrabold ${
+                      on ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+
+          <div className="ml-auto">
+            <select
+              value={postingFilter}
+              onChange={(event) => setPostingFilter(event.target.value)}
+              className={`${inputClass} w-auto`}
+            >
+              <option value="all">All postings</option>
+              {postings.map((title) => (
+                <option key={title} value={title}>{title}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <Card
+          title={
+            boardView === 'board'
+              ? `Pipeline — ${visible.length} of ${applications.length}`
+              : `Showing ${visible.length} of ${applications.length}`
+          }
+          hint={
+            boardView === 'board'
+              ? 'Drag a candidate to another column to change their status. It saves immediately.'
+              : 'Update status, add notes, and schedule interviews.'
+          }
+        >
           {loading ? (
             <EmptyState text="Loading candidates..." />
-          ) : applications.length ? (
-            applications.map((application) => (
+          ) : !applications.length ? (
+            <EmptyState text="Nothing to work yet. Applications appear here once your candidates apply to a posting." />
+          ) : !visible.length ? (
+            <EmptyState text="No candidates match this filter." />
+          ) : boardView === 'board' ? (
+            <KanbanBoard
+              columns={
+                stageFilter === 'all'
+                  ? BOARD_COLUMNS
+                  : BOARD_COLUMNS.filter((column) => column.key === stageFilter)
+              }
+              items={visible}
+              getKey={(application) => application.id}
+              getColumn={columnFor}
+              onMove={moveApplication}
+              renderCard={(application) => (
+                <div>
+                  <p className="text-[13px] font-bold leading-snug text-slate-900">
+                    {application.candidate?.name || 'Candidate'}
+                  </p>
+                  <p className="mt-0.5 text-[11.5px] text-slate-500">
+                    {application.title}
+                  </p>
+
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <Pill>{application.status}</Pill>
+                    {activeInterview(application) && (
+                      <Pill tone="blue">
+                        {formatWhen(activeInterview(application).startsAt)}
+                      </Pill>
+                    )}
+                  </div>
+                </div>
+              )}
+            />
+          ) : (
+            visible.map((application) => (
               <CandidateCard
                 key={application.id}
                 application={application}
@@ -937,8 +1466,6 @@ function RecruiterPortalPage({ activePage, currentUser, showToast, setActivePage
                 onSchedule={scheduleInterview}
               />
             ))
-          ) : (
-            <EmptyState text="Nothing to work yet. Applications appear here once your candidates apply to a posting." />
           )}
         </Card>
       </section>
