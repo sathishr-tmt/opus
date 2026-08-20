@@ -4,6 +4,7 @@
 import fs from 'fs';
 import PizZip from 'pizzip';
 import { llmJson } from './llm.js';
+import { cleanText } from './resume-engine/sanitize/ai-marks.mjs';
 
 function escapeXml(s = '') {
   return String(s)
@@ -57,12 +58,29 @@ ${JSON.stringify(nonEmpty.map((n) => n.text))}`;
   }
 
   // Map rewritten text back to the ORIGINAL paragraph indexes.
+  // Strip invisible characters the model may have emitted before they reach
+  // the document. A zero-width space inside "JavaScript" makes an applicant
+  // tracking system read two unknown tokens instead of one known skill, and
+  // the candidate silently loses the keyword match. A narrow no-break space in
+  // "Jun 2026" stops date matching, so their tenure reads as absent.
   const byIndex = new Map();
+  let sanitised = 0;
+
   nonEmpty.forEach((n, idx) => {
-    if (rewritten[idx] != null && String(rewritten[idx]).trim()) {
-      byIndex.set(n.i, String(rewritten[idx]));
-    }
+    const raw = rewritten[idx];
+    if (raw == null || !String(raw).trim()) return;
+
+    const { text, report } = cleanText(String(raw));
+    // The report lists what was found and what was done; a non-empty
+    // actions array means this paragraph was actually altered.
+    if (report?.actions?.length) sanitised += 1;
+
+    byIndex.set(n.i, text);
   });
+
+  if (sanitised) {
+    console.log(`docxRewrite: cleaned invisible characters from ${sanitised} paragraph(s)`);
+  }
 
   // Walk paragraphs in order; for each rewritten one, put the new text into the
   // FIRST <w:t> run (keeping its formatting) and blank the remaining runs.

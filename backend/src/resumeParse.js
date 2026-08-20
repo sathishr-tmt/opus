@@ -8,6 +8,8 @@
 // always does something instead of silently failing.
 import fs from 'fs';
 import mammoth from 'mammoth';
+import { extractContact } from './resume-engine/format/contact.mjs';
+import { assertNotFlattened } from './resume-engine/format/source-profile.mjs';
 
 const SKILL_DICTIONARY = [
   'JavaScript', 'TypeScript', 'Java', 'Python', 'C#', 'C++', 'Go', 'Golang', 'Ruby',
@@ -227,14 +229,36 @@ async function parseResumeLocally(filePath, mimeType) {
     };
   }
 
+  // Contact details come from resume-engine, which handles the cases the
+  // simple regexes here get wrong — most usefully, it will not mistake a date
+  // range like "2021 - 2024" for a phone number.
+  let contact = {};
+  try {
+    contact = extractContact(text) || {};
+  } catch {
+    contact = {};
+  }
+
+  // Warn if extraction destroyed the line structure. This does not block the
+  // parse — the fields below survive on a flattened document — but bullet and
+  // section detection would be worthless, so it is worth knowing about.
+  try {
+    assertNotFlattened(text);
+  } catch (error) {
+    console.warn('resumeParse: structure warning —', error.message);
+  }
+
   return {
     professionalTitle: findTitle(text),
     experienceYears: findExperienceYears(text),
     skills: findSkills(text),
     professionalSummary: findSummary(text),
-    location: findLocation(text),
-    phone: findPhone(text),
-    email: findEmail(text)
+    location: contact.location || findLocation(text),
+    phone: contact.phone || findPhone(text),
+    email: contact.email || findEmail(text),
+    fullName: contact.fullName || null,
+    linkedin: contact.linkedin || null,
+    github: contact.github || null
   };
 }
 
