@@ -4,7 +4,7 @@
 // Nothing is invented: a dimension the posting does not state (for example a
 // seniority level) is shown as "Not stated" rather than given a made-up score.
 import { useState, useEffect } from 'react';
-import { RefreshCw, Sparkles, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Sparkles, AlertTriangle, ExternalLink } from 'lucide-react';
 import { apiRequest } from '../lib/api.js';
 import { EmptyState, btnClass, btnPrimaryClass } from './ui.jsx';
 
@@ -98,10 +98,56 @@ function SkillPills({ title, skills, tone }) {
 }
 
 /**
+ * Build the starting prompt handed to an external assistant.
+ *
+ * This is a draft, not a submission: it opens in a new tab where the candidate
+ * edits it and attaches their own resume before sending anything. Kept under
+ * roughly 6000 characters so the URL survives every browser.
+ */
+function buildPrompt({ job, matched = [], missing = [], bonus = [], score }) {
+  const list = (items) => (items.length ? items.join(', ') : 'None detected');
+
+  const description = String(job?.description || '')
+    .replace(/\s+/g, ' ')
+    .slice(0, 2500);
+
+  return [
+    "I'm tailoring my resume for the role below. I'll attach my current resume in my next message.",
+    '',
+    `ROLE: ${job?.title || 'Not listed'}`,
+    `COMPANY: ${job?.company || 'Not listed'}`,
+    `LOCATION: ${job?.location || 'Not listed'}`,
+    score != null ? `CURRENT MATCH SCORE: ${score}%` : '',
+    '',
+    'SKILLS THIS JOB ASKS FOR THAT I ALREADY HAVE:',
+    list(matched),
+    '',
+    "SKILLS THIS JOB ASKS FOR THAT MY PROFILE DOESN'T SHOW:",
+    list(missing),
+    '',
+    'OTHER SKILLS I HAVE THAT THIS JOB DID NOT ASK FOR:',
+    list(bonus),
+    '',
+    'JOB DESCRIPTION:',
+    description || 'Not provided.',
+    '',
+    'WHAT I NEED:',
+    '1. Rewrite my resume for this specific role.',
+    '2. Keep the existing structure, headings and formatting exactly as they are — change the wording only.',
+    '3. For each skill listed as missing, first check whether my resume already shows that experience under different wording. If it does, bring it to the surface. If it genuinely does not, tell me rather than adding it.',
+    '4. Do not invent employers, dates, job titles, degrees or metrics.',
+    '5. Where I have a relevant bonus skill, work it in naturally if it strengthens the application.'
+  ]
+    .filter((line) => line !== '')
+    .join('\n');
+}
+
+/**
  * @param {object}   job        The job being matched against.
  * @param {string}   jobId      Its id.
  * @param {function} onRewrite  Optional — shows a "Tailor my resume" button.
  * @param {boolean}  rewriting  Disables that button while it runs.
+ * @param {boolean}  saved      Whether the job is already saved.
  */
 function MatchPanel({ job, jobId, onRewrite, rewriting, showToast, saved = true }) {
   const [data, setData] = useState(null);
@@ -128,6 +174,31 @@ function MatchPanel({ job, jobId, onRewrite, rewriting, showToast, saved = true 
   useEffect(() => {
     if (jobId) evaluate();
   }, [jobId]);
+
+  // Opens a new tab with the prompt already typed in. The candidate reviews it,
+  // attaches their resume, and decides what to send.
+  function openInAssistant(provider) {
+    const prompt = buildPrompt({
+      job,
+      matched: data?.matched || [],
+      missing: data?.missing || [],
+      bonus: data?.bonus || [],
+      score: data?.score
+    });
+
+    const encoded = encodeURIComponent(prompt);
+
+    const url =
+      provider === 'claude'
+        ? `https://claude.ai/new?q=${encoded}`
+        : `https://chatgpt.com/?q=${encoded}`;
+
+    window.open(url, '_blank', 'noopener,noreferrer');
+
+    if (showToast) {
+      showToast('Prompt opened in a new tab — attach your resume there.');
+    }
+  }
 
   if (loading) {
     return (
@@ -237,6 +308,29 @@ function MatchPanel({ job, jobId, onRewrite, rewriting, showToast, saved = true 
             </span>
           </button>
         )}
+      </div>
+
+      {/* Hand the same analysis to an external assistant as a starting prompt.
+          Opens in a new tab; nothing is sent until the candidate sends it. */}
+      <div className="mt-3 border-t border-slate-100 pt-3">
+        <p className="mb-2 text-[11.5px] text-slate-500">
+          Or draft it yourself with an AI assistant. The prompt opens ready to
+          edit — attach your resume there before sending.
+        </p>
+
+        <div className="flex flex-wrap gap-2">
+          <button className={btnClass} onClick={() => openInAssistant('chatgpt')}>
+            <span className="inline-flex items-center gap-1.5">
+              Open in ChatGPT <ExternalLink size={13} />
+            </span>
+          </button>
+
+          <button className={btnClass} onClick={() => openInAssistant('claude')}>
+            <span className="inline-flex items-center gap-1.5">
+              Open in Claude <ExternalLink size={13} />
+            </span>
+          </button>
+        </div>
       </div>
 
       {score < 40 && missing?.length > 0 && (
